@@ -1,0 +1,38 @@
+#######################################
+# Syntax Coloring Map For PN5180-Library
+####################################### 
+# Class
+#######################################
+
+PN5180-Library KEYWORD1
+PN5180	KEYWORD1
+
+#######################################
+# Methods and Functions 
+#######################################	
+
+writeRegister	KEYWORD2
+writeRegisterWithOrMask	KEYWORD2
+writeRegisterWithAndMask	KEYWORD2
+readRegister	KEYWORD2
+readEprom	KEYWORD2
+sendData	KEYWORD2
+readData	KEYWORD2
+loadRFConfig	KEYWORD2
+setRF_on	KEYWORD2
+setRF_off	KEYWORD2
+checkIRQ	KEYWORD2
+getInterrupt	KEYWORD2
+getTransceiveState	KEYWORD2
+getInventory	KEYWORD2
+readSingleBlock	KEYWORD2
+getSystemInfo	KEYWORD2
+
+#######################################
+# Constants
+#######################################
+
+PN5180_NSS	LITERAL1
+PN5180_BUSY	LITERAL1
+PN5180_IRQ	LITERAL1
+PN5180_SPI_SETTINGS	LITERAL1
