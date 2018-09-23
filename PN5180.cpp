@@ -2,7 +2,7 @@
 //
 // DESC:
 //
-#define DEBUG 1
+//#define DEBUG 1
 
 #include <Arduino.h>
 #include "PN5180.h"
@@ -21,7 +21,10 @@
 #define PN5180_RF_ON                    (0x16)
 #define PN5180_RF_OFF                   (0x17)
 
+
 PN5180::PN5180(uint8_t SSpin, uint8_t BUSYpin, uint8_t IRQpin) {
+  PN5180DEBUG("PN5180 class initialized\n");
+  
   PN5180_NSS = SSpin;
   PN5180_BUSY = BUSYpin;
   PN5180_IRQ = IRQpin;
@@ -45,7 +48,6 @@ PN5180::PN5180(uint8_t SSpin, uint8_t BUSYpin, uint8_t IRQpin) {
   SPI.begin();
 }
 
-
 /*  
  * Inventory, code=01
  * 
@@ -58,36 +60,22 @@ bool PN5180::getInventory(uint8_t *uid) {
   uint8_t inventory[] = { 0x26, 0x01, 0x00 };
   //                        |\- inventory flag + high data rate
   //                        \-- 1 slot: only one card, no AFI field present
-  PN5180DEBUG("Get Inventory: cmd=");
-#ifdef DEBUG  
-  for (int i=0; i<sizeof(inventory); i++) {
-    PN5180DEBUG(formatHex(inventory[i]));
-    PN5180DEBUG(" ");
-  }
-  PN5180DEBUG("\n");
-#endif
+  PN5180DEBUG(F("Get Inventory...\n"));
 
   uint8_t *readBuffer;
   if (!issueISO15693Command(inventory, sizeof(inventory), &readBuffer)) {
     PN5180DEBUG("no answer\n");
     return false;
   }
-  PN5180DEBUG("sizeof readBuffer=");
-  PN5180DEBUG(sizeof(readBuffer));
-  PN5180DEBUG("\n");
-  
-  PN5180DEBUG("Response flags: ");
+
+  PN5180DEBUG(F("Response flags: "));
   PN5180DEBUG(formatHex(readBuffer[0]));
-  PN5180DEBUG("\n");
-  
-  PN5180DEBUG("Data Storage Format ID: ");
+  PN5180DEBUG(F(", Data Storage Format ID: "));
   PN5180DEBUG(formatHex(readBuffer[1]));
-  PN5180DEBUG("\n");
-  
-  PN5180DEBUG("UID: ");
+  PN5180DEBUG(F(", UID: "));
   for (int i=0; i<8; i++) {
     uid[i] = readBuffer[2+i]; 
-    PN5180DEBUG(formatHex(uid[9-i])); // LSB comes first
+    PN5180DEBUG(formatHex(uid[7-i])); // LSB comes first
     if (i<2) PN5180DEBUG(":");
   }
   PN5180DEBUG("\n");
@@ -291,25 +279,16 @@ bool PN5180::getSystemInfo(uint8_t *uid, uint8_t *blockSize, uint8_t *numBlocks)
  */ 
 bool PN5180::issueISO15693Command(uint8_t *cmd, uint8_t cmdLen, uint8_t **resultPtr) {
 #ifdef DEBUG  
-  PN5180DEBUG("Issue Command 0x");
-  for (int i=0; i<cmdLen; i++) {
-    PN5180DEBUG(formatHex(cmd[i]));
-  }
-  PN5180DEBUG("\n");
+  PN5180DEBUG(F("Issue Command 0x"));
+  PN5180DEBUG(formatHex(cmd[1]));
+  PN5180DEBUG("...\n");
 #endif
 
-  /*
-  uint8_t isoCmd[cmdLen+1];
-  isoCmd[0] = 0x00; // ISO Command Configuration Byte
-  for (int i=0; i<cmdLen; i++) {
-    isoCmd[i+1] = cmd[i];
-  }
-  sendData(isoCmd, sizeof(isoCmd));
-  */
   sendData(cmd, cmdLen);
+  delay(10);  
   
-  while (!checkIRQ()); // wait for RX_IRQ to raise
-  
+//  while (!checkIRQ()); // wait for RX_IRQ to raise
+/*  
   uint32_t irqStatus = getInterrupt();
   if (irqStatus & (1<<0)) {
     Serial.println("\tRQ_IRQ_STAT detected.");
@@ -317,26 +296,43 @@ bool PN5180::issueISO15693Command(uint8_t *cmd, uint8_t cmdLen, uint8_t **result
   else {
     Serial.println("\tUNKNOWN IRQ state detected!");
   }
-
+*/
   uint32_t rxStatus;
   readRegister(RX_STATUS, &rxStatus);
+
+#ifdef DEBUG  
   PN5180DEBUG("RX-Status=");
   PN5180DEBUG(formatHex(rxStatus));
-
+  if (rxStatus & (1<<16)) PN5180DEBUG(F("RX_DATA_INTEGRITY_ERROR"));
+  if (rxStatus & (1<<17)) PN5180DEBUG(F("RX_PROTOCOL_ERROR"));
+  if (rxStatus & (1<<18)) PN5180DEBUG(F("RX_COLLISION_DETECTED"));
+  Serial.flush();
+#endif
+  
+  /*
   uint8_t frames = (uint8_t)((rxStatus >> 9) & 0x0000000f);
   PN5180DEBUG(", frames=");
   PN5180DEBUG(frames);
+  */
   
   uint16_t len = (uint16_t)(rxStatus & 0x000001ff);  
   PN5180DEBUG(", len=");
   PN5180DEBUG(len);
   PN5180DEBUG("\n");
   if (0 == len) return false;
+  if (511 == len) return false;
   
   *resultPtr = malloc(len);
-  readData(*resultPtr, len);    // TODO: Ist readData() hier erforderlich oder gleich
-                                // direct recvSPIFrame() ???
-
+  readData(*resultPtr, len);
+#ifdef DEBUG  
+  Serial.print("Read=");
+  for (int i=0; i<len; i++) {
+    Serial.print(formatHex((*resultPtr)[i]));
+    if (i<len-1) Serial.print(":"); 
+  }
+  Serial.println();
+#endif
+      
   uint8_t responseFlags = *resultPtr[0];
   if (responseFlags & (1<<0)) { // error flag
     PN5180DEBUG("ERROR code=");
@@ -344,34 +340,34 @@ bool PN5180::issueISO15693Command(uint8_t *cmd, uint8_t cmdLen, uint8_t **result
     PN5180DEBUG(" - ");
     switch (*resultPtr[1]) {
       case 0x01:
-        PN5180DEBUG("The command is not supported");
+        PN5180DEBUG(F("The command is not supported"));
         break;
       case 0x02:
-        PN5180DEBUG("The command is not recognised");
+        PN5180DEBUG(F("The command is not recognised"));
         break;
       case 0x03:
-        PN5180DEBUG("The option is not supported");
+        PN5180DEBUG(F("The option is not supported"));
         break;
       case 0x0f:
-        PN5180DEBUG("Unknown error");
+        PN5180DEBUG(F("Unknown error"));
         break;
       case 0x10:
-        PN5180DEBUG("The specified block is not available (doesn’t exist)");
+        PN5180DEBUG(F("The specified block is not available (doesn’t exist)"));
         break;
       case 0x11:
-        PN5180DEBUG("The specified block is already locked and thus cannot be locked again");
+        PN5180DEBUG(F("The specified block is already locked and thus cannot be locked again"));
         break;
       case 0x12:
-        PN5180DEBUG("The specified block is locked and its content cannot be changed");
+        PN5180DEBUG(F("The specified block is locked and its content cannot be changed"));
         break;
       case 0x13:
-        PN5180DEBUG("The specified block was not successfully programmed");
+        PN5180DEBUG(F("The specified block was not successfully programmed"));
         break;
       case 0x14:
-        PN5180DEBUG("The specified block was not successfully locked");
+        PN5180DEBUG(F("The specified block was not successfully locked"));
         break;
       default:
-        PN5180DEBUG("Custom command error code");
+        PN5180DEBUG(F("Custom command error code"));
         break;
     }
     PN5180DEBUG("\n");
@@ -400,11 +396,13 @@ bool PN5180::writeRegister(uint8_t reg, uint32_t value) {
   PN5180DEBUG(formatHex(reg));
   PN5180DEBUG(", value=");
   PN5180DEBUG(formatHex(value));
+  /*
   PN5180DEBUG(", (LSB first): ");
   for (int i=0; i<4; i++) {
     PN5180DEBUG(formatHex(p[i]));
     PN5180DEBUG(" ");
   }
+  */
   PN5180DEBUG("\n");
 #endif
 
@@ -412,10 +410,12 @@ bool PN5180::writeRegister(uint8_t reg, uint32_t value) {
   For all 4 byte command parameter transfers (e.g. register values), the payload
   parameters passed follow the little endian approach (Least Significant Byte first). 
    */
-  SPI.beginTransaction(PN5180_SPI_SETTINGS);  
   uint8_t buf[6] = { PN5180_WRITE_REGISTER, reg, p[0], p[1], p[2], p[3] };
+
+  SPI.beginTransaction(PN5180_SPI_SETTINGS);  
   sendSPIFrame(buf, 6);
   SPI.endTransaction();
+  
   return !checkIRQ();
 }
 
@@ -430,11 +430,13 @@ bool PN5180::writeRegisterWithOrMask(uint8_t reg, uint32_t mask) {
   PN5180DEBUG(formatHex(reg));
   PN5180DEBUG(" with OR mask=");
   PN5180DEBUG(formatHex(mask));
+  /*
   PN5180DEBUG(", (LSB first): ");
   for (int i=0; i<4; i++) {
     PN5180DEBUG(formatHex(p[i]));
     PN5180DEBUG(" ");
   }
+  */
   PN5180DEBUG("\n");
 #endif
   
@@ -442,6 +444,7 @@ bool PN5180::writeRegisterWithOrMask(uint8_t reg, uint32_t mask) {
   uint8_t buf[6] = { PN5180_WRITE_REGISTER_OR_MASK, reg, p[0], p[1], p[2], p[3] };
   sendSPIFrame(buf, 6);
   SPI.endTransaction();
+  
   return !checkIRQ();
 }
 
@@ -456,10 +459,12 @@ bool PN5180::writeRegisterWithAndMask(uint8_t reg, uint32_t mask) {
   PN5180DEBUG(formatHex(reg));
   PN5180DEBUG(" with AND mask=");
   PN5180DEBUG(formatHex(mask));
+  /*
   for (int i=0; i<4; i++) {
     PN5180DEBUG(formatHex(p[i]));
     PN5180DEBUG(" ");
   }
+  */
   PN5180DEBUG("\n");
 #endif
       
@@ -467,6 +472,7 @@ bool PN5180::writeRegisterWithAndMask(uint8_t reg, uint32_t mask) {
   uint8_t buf[6] = { PN5180_WRITE_REGISTER_AND_MASK, reg, p[0], p[1], p[2], p[3] };
   sendSPIFrame(buf, 6);
   SPI.endTransaction();
+
   return !checkIRQ();
 }
 
@@ -474,11 +480,9 @@ bool PN5180::writeRegisterWithAndMask(uint8_t reg, uint32_t mask) {
  * READ_REGISTER - 0x04
  */
 bool PN5180::readRegister(uint8_t reg, uint32_t *value) {
-#ifdef DEBUG
   PN5180DEBUG("Reading register 0x");
   PN5180DEBUG(formatHex(reg));
-  PN5180DEBUG(": value=");
-#endif
+  PN5180DEBUG("\n");
   
   SPI.beginTransaction(PN5180_SPI_SETTINGS);
   uint8_t cmd[2] = { PN5180_READ_REGISTER, reg };
@@ -486,6 +490,7 @@ bool PN5180::readRegister(uint8_t reg, uint32_t *value) {
   recvSPIFrame((uint8_t*)value, 4);
   SPI.endTransaction();
   
+  PN5180DEBUG("Register value=");
   PN5180DEBUG(formatHex(*value));
   PN5180DEBUG("\n");
 
@@ -560,7 +565,8 @@ bool PN5180::sendData(uint8_t *data, uint8_t len) {
   SPI.beginTransaction(PN5180_SPI_SETTINGS);
   sendSPIFrame(buffer, len+2);
   SPI.endTransaction();
-  return !checkIRQ();
+  //return !checkIRQ();
+  return true;
 }
 
 /*
@@ -590,7 +596,8 @@ bool PN5180::readData(uint8_t *buffer, uint16_t len) {
   PN5180DEBUG("\n");
 #endif  
 
-  return !checkIRQ();
+  //return !checkIRQ();
+  return true;
 }
 
 /*
@@ -602,8 +609,8 @@ bool PN5180::readData(uint8_t *buffer, uint16_t len) {
  * configuration                       (kbit/s)  configuration               (kbit/s)
  * byte (hex)                                    byte (hex)
  * ----------------------------------------------------------------------------------------------
- *   0D              ISO 15693 ASK100  26        8D              ISO 15693   26
- * ->0E              ISO 15693 ASK10   26        8E              ISO 15693   53
+ * ->0D              ISO 15693 ASK100  26        8D              ISO 15693   26
+ *   0E              ISO 15693 ASK10   26        8E              ISO 15693   53
  */
 bool PN5180::loadRFConfig(uint8_t txConf, uint8_t rxConf) {
   PN5180DEBUG("Load RF-Config: txConf=");
@@ -616,7 +623,8 @@ bool PN5180::loadRFConfig(uint8_t txConf, uint8_t rxConf) {
   uint8_t cmd[3] = { PN5180_LOAD_RF_CONFIG, txConf, rxConf };
   sendSPIFrame(cmd, 3);
   SPI.endTransaction();
-  return !checkIRQ();
+  //return !checkIRQ();
+  return true;
 }
 
 /*
@@ -629,7 +637,8 @@ bool PN5180::setRF_on() {
   uint8_t cmd[2] = { PN5180_RF_ON, 0x00 };
   sendSPIFrame(cmd, 2);
   SPI.endTransaction();
-  return !checkIRQ();
+  //return !checkIRQ();
+  return true;
 }
 
 /*
@@ -726,7 +735,7 @@ bool PN5180::recvSPIFrame(uint8_t *recvBuffer, uint8_t recvBufferLen) {
 bool PN5180::checkIRQ() {
   // check IRQ for error
   if (HIGH == digitalRead(PN5180_IRQ)) {
-    PN5180DEBUG("ERROR detected: IRQ is set!\n");
+//    PN5180DEBUG("ERROR detected: IRQ is set!\n");
     return true;
   }
   else return false; // no IRQ
@@ -737,10 +746,11 @@ bool PN5180::checkIRQ() {
  * @desc  read interrupt status register and clear interrupt status
  */
 uint32_t PN5180::getInterrupt() {
-  PN5180DEBUG("Read IRQ-Status register: ");
+  PN5180DEBUG(F("Read IRQ-Status register...\n"));
   
   uint32_t irqStatus;
   readRegister(IRQ_STATUS, &irqStatus);
+  PN5180DEBUG("IRQ-Status=");
   PN5180DEBUG(formatHex(irqStatus));
   PN5180DEBUG("\n");
   
@@ -781,7 +791,7 @@ uint8_t PN5180::getTransceiveState() {
 //---------------------------------------------------------------------------------------------
 
 #ifdef DEBUG
-String PN5180::formatHex(uint8_t val) {
+String PN5180::formatHex(const uint8_t val) {
   const char hexChar[] = "0123456789ABCDEF";
   
   uint8_t hi = (val & 0xf0) >> 4;
@@ -794,7 +804,7 @@ String PN5180::formatHex(uint8_t val) {
   return s;
 }
 
-String PN5180::formatHex(uint16_t val) {
+String PN5180::formatHex(const uint16_t val) {
   uint8_t hi = (val & 0xff00) >> 8;
   uint8_t lo = (val & 0x00ff);
 
@@ -805,7 +815,7 @@ String PN5180::formatHex(uint16_t val) {
   return s;
 }
 
-String PN5180::formatHex(uint32_t val) {
+String PN5180::formatHex(const uint32_t val) {
   uint16_t hi = (val & 0xffff0000) >> 16;
   uint16_t lo = (val & 0x0000ffff);
 

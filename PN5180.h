@@ -32,6 +32,7 @@
 #define DIE_IDENTIFIER      (0x00)
 #define PRODUCT_VERSION     (0x10)
 #define FIRMWARE_VERSION    (0x12)
+#define EEPROM_VERSION      (0x14)
 
 class PN5180 {
 private:
