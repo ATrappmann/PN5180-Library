@@ -44,7 +44,8 @@
  * 13   REQ     2?  I/O   AUX2 - Analog test bus or download
  * 
  */
-#include "PN5180.h"
+#include <PN5180.h>
+#include <PN5180ISO15693.h>
 
 #define PN5180_NSS  10
 #define PN5180_BUSY 9
@@ -55,6 +56,7 @@
 #define RF_LED LED_BUILTIN
 
 PN5180 nfc(PN5180_NSS, PN5180_BUSY, PN5180_IRQ);
+PN5180ISO15693 isoNfc(&nfc);
 
 void setup() {
   pinMode(RF_LED, OUTPUT);
@@ -75,10 +77,7 @@ void setup() {
     Serial.print(".");
     Serial.println(productVersion[0]);
   }
-  else {
-    Serial.println(" - ERROR!");
-    handleError();
-  }
+  else showIRQStatus();
 
   Serial.println(F("----------------------------------"));
   Serial.println(F("Reading firmware version..."));
@@ -89,10 +88,7 @@ void setup() {
     Serial.print(".");
     Serial.println(firmwareVersion[0]);
   }
-  else {
-    Serial.println(" - ERROR!");
-    handleError();
-  }
+  else showIRQStatus();
 
   Serial.println(F("----------------------------------"));
   Serial.println(F("Reading EEPROM version..."));
@@ -103,12 +99,28 @@ void setup() {
     Serial.print(".");
     Serial.println(eepromVersion[0]);
   }
-  else {
-    Serial.println(" - ERROR!");
-    handleError();
-  }
+  else showIRQStatus();
 
-  setupRF();
+  Serial.println(F("----------------------------------"));
+  Serial.println(F("Reading IRQ pin config..."));
+  uint8_t irqConfig;
+  if (nfc.readEprom(IRQ_PIN_CONFIG, &irqConfig, 1)) {
+    Serial.print(F("IRQ_PIN_CONFIG=0x"));
+    Serial.println(irqConfig, HEX);
+  }
+  else showIRQStatus();
+
+  Serial.println(F("----------------------------------"));
+  Serial.println(F("Reading IRQ_ENABLE register..."));
+  uint32_t irqEnable;
+  if (nfc.readRegister(IRQ_ENABLE, &irqEnable)) {
+    Serial.print(F("IRQ_ENABLE=0x"));
+    Serial.println(irqConfig, HEX);
+  }
+  else showIRQStatus();
+
+  isoNfc.setupRF();
+  digitalWrite(RF_LED, HIGH);
 }
 
 uint32_t loopCnt = 0;
@@ -119,8 +131,12 @@ void loop() {
   Serial.print(F("Loop #"));
   Serial.println(loopCnt++);
 
+  Serial.print(F("Check IRQ signal: "));
+  Serial.println((nfc.isIRQ()?"HIGH":"LOW"));
+  showIRQStatus();
+  
   uint8_t uid[8];
-  if (nfc.getInventory(uid)) {
+  if (isoNfc.getInventory(uid)) {
     Serial.print(F("Inventory successful, uid="));
     for (int i=0; i<8; i++) {
       Serial.print(uid[7-i], HEX); // LSB is first
@@ -129,12 +145,12 @@ void loop() {
     Serial.println();
 
     uint8_t blockSize, numBlocks;
-    if (nfc.getSystemInfo(uid, &blockSize, &numBlocks)) {
+    if (isoNfc.getSystemInfo(uid, &blockSize, &numBlocks)) {
       Serial.println(F("System Info retrieved"));
 
       uint8_t readBuffer[blockSize];
       for (int no=0; no<numBlocks; no++) {
-        if (nfc.readSingleBlock(uid, no, readBuffer, blockSize)) {
+        if (isoNfc.readSingleBlock(uid, no, readBuffer, blockSize)) {
           Serial.print(F("Read block #"));
           Serial.print(no);
           Serial.print(": ");
@@ -154,20 +170,20 @@ void loop() {
         }
         else {
           Serial.println(F("Error in readSingleBlock!"));
-          handleError();
+          showIRQStatus();
         }
       }  
     }
     else {
       Serial.println(F("Error in getSystemInfo!"));
-      handleError();
+      showIRQStatus();
     }
   }
   else {
     Serial.println(F("Error in getInventory!"));
-    handleError();
+    showIRQStatus();
     resetNFC();
-    setupRF();
+    isoNfc.setupRF();
   }
 
   delay(1000);
@@ -176,54 +192,21 @@ void loop() {
 void resetNFC() {
   Serial.println(F("----------------------------------"));
   Serial.println(F("PN5180 Hard-Reset..."));
-  digitalWrite(PN5180_RST, LOW);
-  delay(100);
-  digitalWrite(PN5180_RST, HIGH);
+  digitalWrite(PN5180_RST, LOW);  // at least 10us required
+  delay(20);
+  digitalWrite(PN5180_RST, HIGH); // 2ms to ramp up required
   delay(20);
   
   Serial.println(F("----------------------------------"));
   Serial.print(F("Check IRQ signal: "));
-  Serial.println((nfc.checkIRQ()?"HIGH":"LOW"));
-  handleError();
+  Serial.println((nfc.isIRQ()?"HIGH":"LOW"));
+  showIRQStatus();
   Serial.print(F("IRQ signal is now: "));
-  Serial.println((nfc.checkIRQ()?"HIGH":"LOW"));  
+  Serial.println((nfc.isIRQ()?"HIGH":"LOW"));  
 }
 
-void setupRF() {
-  Serial.println(F("----------------------------------"));
-  Serial.println(F("Loading RF-Configuration..."));
-  if (nfc.loadRFConfig(0x0d, 0x8d)) {  // ISO15693 parameters
-    Serial.println("ok");
-  }
-  /*
-  else {
-    Serial.println(" - ERROR!");
-    handleError();
-  }
-  */
-  
-  Serial.println(F("----------------------------------"));
-  Serial.println(F("Turning ON RF field..."));
-  if (nfc.setRF_on()) {
-    digitalWrite(RF_LED, HIGH);
-    Serial.println("ok");
-  }
-  /*
-  else {
-    Serial.println(" - ERROR!");
-    handleError();
-  }
-  */
-
-//  nfc.writeRegister(TIMER1_CONFIG, 0x00000000);
-//  nfc.writeRegister(TIMER1_RELOAD, 0x00002557);
-  nfc.writeRegisterWithAndMask(SYSTEM_CONFIG, 0xfffffff8);  // Idle/StopCom Command
-  nfc.writeRegisterWithOrMask(SYSTEM_CONFIG, 0x00000003);   // Transceive Command
-//  nfc.writeRegister(TIMER1_CONFIG, 0x00100801);
-}
-
-void handleError() {
-  uint32_t irqStatus = nfc.getInterrupt();
+void showIRQStatus() {
+  uint32_t irqStatus = nfc.getIRQStatus();
   Serial.print("IRQ-Status 0x");
   Serial.println(irqStatus, HEX);
 
@@ -247,5 +230,4 @@ void handleError() {
   if (irqStatus & (1<<17)) Serial.println(F("\tGENERAL_ERROR_IRQ_STAT"));
   if (irqStatus & (1<<18)) Serial.println(F("\tHV_ERROR_IRQ_STAT"));
   if (irqStatus & (1<<19)) Serial.println(F("\tLPCD_IRQ_STAT"));
-  
 }

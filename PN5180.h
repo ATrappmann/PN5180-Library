@@ -7,12 +7,6 @@
 
 #include <SPI.h>
 
-#ifdef DEBUG
-#define PN5180DEBUG(msg) Serial.print(msg)
-#else
-#define PN5180DEBUG(msg)
-#endif
-
 // PN5180 Registers
 #define SYSTEM_CONFIG       (0x00)
 #define IRQ_ENABLE          (0x01)
@@ -33,6 +27,18 @@
 #define PRODUCT_VERSION     (0x10)
 #define FIRMWARE_VERSION    (0x12)
 #define EEPROM_VERSION      (0x14)
+#define IRQ_PIN_CONFIG      (0x1A)
+
+enum PN5180TransceiveStat {
+  PN5180_TS_Idle = 0,
+  PN5180_TS_WaitTransmit = 1,
+  PN5180_TS_Transmitting = 2,
+  PN5180_TS_WaitReceive = 3,
+  PN5180_TS_WaitForData = 4,
+  PN5180_TS_Receiving = 5,
+  PN5180_TS_LoopBack = 6,
+  PN5180_TS_RESERVED = 7
+};
 
 class PN5180 {
 private:
@@ -79,37 +85,16 @@ public:
    * Helper functions
    */
 public:
-  bool checkIRQ();
-  uint32_t getInterrupt();
-  uint8_t getTransceiveState();
+  bool isIRQ();
+  uint32_t getIRQStatus();
+  PN5180TransceiveStat getTransceiveState();
      
-  /*
-   * ISO 15693 commands with tag
-   */
-private:
-  bool issueISO15693Command(uint8_t *cmd, uint8_t cmdLen, uint8_t **resultPtr);
-
-public:   
-  bool getInventory(uint8_t *uid);
-  bool readSingleBlock(uint8_t *uid, uint8_t blockNo, uint8_t *readBuffer, uint8_t blockSize);
-  bool getSystemInfo(uint8_t *uid, uint8_t *blockSize, uint8_t *numBlocks);
-
   /*
    * Private methods, called within an SPI transaction
    */
 private:
   bool sendSPIFrame(uint8_t *sendBuffer, uint8_t sendBufferLen);
   bool recvSPIFrame(uint8_t *recvBuffer, uint8_t recvBufferLen);
-
-#ifdef DEBUG
-  /*
-   * Helper methods for debugging
-   */
-private:
-  String formatHex(uint8_t val);
-  String formatHex(uint16_t val);
-  String formatHex(uint32_t val);
-#endif  
 };
 
 #endif /* PN5180_H */

@@ -6,6 +6,7 @@
 
 #include <Arduino.h>
 #include "PN5180.h"
+#include "Debug.h"
 
 // PN5180 1-Byte Direct Commands
 // see 11.4.3.3 Host Interface Command List
@@ -36,9 +37,8 @@ PN5180::PN5180(uint8_t SSpin, uint8_t BUSYpin, uint8_t IRQpin) {
    * = 0 and CPHA = 0.
    */
   // Settings for PN5180: 7Mbps, MSB first, SPI_MODE0 (CPOL=0, CPHA=0) 
-  //const SPISettings PN5180_SPI_SETTINGS(7000000, MSBFIRST, SPI_MODE0);
   // use defaults: init_AlwaysInline(4000000, MSBFIRST, SPI_MODE0);
-  PN5180_SPI_SETTINGS = SPISettings(7000000, MSBFIRST, SPI_MODE0);
+  PN5180_SPI_SETTINGS = SPISettings(4000000, MSBFIRST, SPI_MODE0);
  
   pinMode(PN5180_NSS, OUTPUT);
   pinMode(PN5180_BUSY, INPUT);
@@ -48,361 +48,22 @@ PN5180::PN5180(uint8_t SSpin, uint8_t BUSYpin, uint8_t IRQpin) {
   SPI.begin();
 }
 
-/*  
- * Inventory, code=01
- * 
- * Request format: SOF, Flags, Inventory, Opt.AFI, Mask len, Mask value, CRC16, EOF
- * Response format: SOF, Flags, DSFID, UID, CRC16, EOF
- * 
- */
-bool PN5180::getInventory(uint8_t *uid) {  
-  //                     Flags,  CMD, maskLen
-  uint8_t inventory[] = { 0x26, 0x01, 0x00 };
-  //                        |\- inventory flag + high data rate
-  //                        \-- 1 slot: only one card, no AFI field present
-  PN5180DEBUG(F("Get Inventory...\n"));
-
-  uint8_t *readBuffer;
-  if (!issueISO15693Command(inventory, sizeof(inventory), &readBuffer)) {
-    PN5180DEBUG("no answer\n");
-    return false;
-  }
-
-  PN5180DEBUG(F("Response flags: "));
-  PN5180DEBUG(formatHex(readBuffer[0]));
-  PN5180DEBUG(F(", Data Storage Format ID: "));
-  PN5180DEBUG(formatHex(readBuffer[1]));
-  PN5180DEBUG(F(", UID: "));
-  for (int i=0; i<8; i++) {
-    uid[i] = readBuffer[2+i]; 
-    PN5180DEBUG(formatHex(uid[7-i])); // LSB comes first
-    if (i<2) PN5180DEBUG(":");
-  }
-  PN5180DEBUG("\n");
-
-  free(readBuffer);
-  return true;
-}
-
-/*
- * Read single block, code=20
- * 
- * Request format: SOF, Flags, ReadSingleBlock, UID, BlockNumber, CRC16, EOF
- * Response format: SOF, Flags, BlockSecurityStatus, Data, CRC16, EOF
- */
-bool PN5180::readSingleBlock(uint8_t *uid, uint8_t blockNo, uint8_t *readBuffer, uint8_t blockSize) {
-  //                              flags, cmd, uid,             blockNo  
-  uint8_t readSingleBlock[] = { 0x62, 0x20, 1,2,3,4,5,6,7,8, blockNo }; // UID has LSB first!
-  //                              |\- high data rate
-  //                              \-- options, addressed by UID
-  for (int i=0; i<8; i++) {
-    readSingleBlock[2+i] = uid[i];
-  }
-  PN5180DEBUG("Read Single Block #");
-  PN5180DEBUG(blockNo); 
-  PN5180DEBUG(", size=");
-  PN5180DEBUG(blockSize);
-  PN5180DEBUG(": ");
-#ifdef DEBUG  
-  for (int i=0; i<sizeof(readSingleBlock); i++) {
-    PN5180DEBUG(" ");
-    PN5180DEBUG(formatHex(readSingleBlock[i]));
-  }
-  PN5180DEBUG("\n");
-#endif
-
-  uint8_t *resultPtr;
-  if (!issueISO15693Command(readSingleBlock, sizeof(readSingleBlock), &resultPtr)) {
-    return false;
-  }
-
-  uint8_t flags = readBuffer[0];
-  if (flags & 0x01) { // check error flag
-    PN5180DEBUG(F("ERROR_FLAG is set!"));
-  }
-  uint8_t secStatus = readBuffer[1];  // wirklich??
-  PN5180DEBUG("Value=");
-  for (int i=0; i<blockSize; i++) {
-    readBuffer[i] = resultPtr[2+i];
-    PN5180DEBUG(formatHex(readBuffer[i]));
-    PN5180DEBUG(" ");
-  }
-  PN5180DEBUG(" ");
-  for (int i=0; i<blockSize; i++) {  
-    char c = readBuffer[i];
-#ifdef DEBUG    
-    if (isPrintable(c)) {
-      PN5180DEBUG(c);
-    }
-    else PN5180DEBUG(".");
-#endif
-  }
-  PN5180DEBUG("\n");
-
-  free(resultPtr);
-  return true;
-}
-
-/*
- * Get System Information, code=2B
- * 
- * Request format: SOF, Flags, GetSysInfo, Opt.UID, CRC16, EOF
- * Response format: 
- *  when NO error: SOF, Flags, InfoFlags, UID, DSFID, AFI, Other fields, CRC16, EOF
- *  when error flag is set: SOF, Flags, Error code, CRC16, EOF
- * 
- */
-bool PN5180::getSystemInfo(uint8_t *uid, uint8_t *blockSize, uint8_t *numBlocks) {
-  uint8_t sysInfo[] = { 0x22, 0x2b, 1,2,3,4,5,6,7,8 };  // UID has LSB first!
-  for (int i=0; i<8; i++) {
-    sysInfo[2+i] = uid[i];
-  }
-  PN5180DEBUG("Get System Information"); 
-#ifdef DEBUG
-  for (int i=0; i<sizeof(sysInfo); i++) {
-    PN5180DEBUG(" ");
-    PN5180DEBUG(formatHex(sysInfo[i]));
-  }
-#endif
-  PN5180DEBUG("\n");
-
-  uint8_t *readBuffer;
-  if (!issueISO15693Command(sysInfo, sizeof(sysInfo), &readBuffer)) {
-    return false;
-  }
-
-  for (int i=0; i<8; i++) {
-    uid[i] = readBuffer[2+i];
-  }  
-#ifdef DEBUG
-  PN5180DEBUG("UID=");
-  for (int i=0; i<8; i++) {
-    PN5180DEBUG(formatHex(readBuffer[9-i]));  // UID has LSB first!
-    if (i<7) PN5180DEBUG(":");
-  }
-  PN5180DEBUG("\n");
-#endif
-  uint8_t *p = &readBuffer[10];
-  
-  uint8_t infoFlags = readBuffer[1];
-  if (infoFlags & 0x01) { // DSFID flag
-    uint8_t dsfid = *p++;
-    PN5180DEBUG("DSDID=");  // Data storage format identifier
-    PN5180DEBUG(formatHex(dsfid));
-    PN5180DEBUG("\n");
-  }
-  if (infoFlags & 0x02) { // AFI flag
-    uint8_t afi = *p++;
-    PN5180DEBUG("AFI=");  // Application family identifier
-    PN5180DEBUG(formatHex(afi));
-    PN5180DEBUG("\n");
-  }
-  if (infoFlags & 0x04) { // VICC Memory size
-    *numBlocks = *p++;
-    *blockSize = *p++; 
-    *blockSize = (*blockSize) & 0x1f;
-    
-    //uint16_t viccMemSize = (*blockSize << 8) | (*numBlocks << 0);
-    *blockSize = *blockSize + 1;
-    // neu:
-    *numBlocks = *numBlocks + 1;
-    uint16_t viccMemSize = (*blockSize) * (*numBlocks);
-    
-    PN5180DEBUG("VICC MemSize=");
-    //PN5180DEBUG(formatHex(viccMemSize));
-    PN5180DEBUG(viccMemSize);
-    PN5180DEBUG(" BlockSize=");
-    PN5180DEBUG(*blockSize);
-    PN5180DEBUG(" NumBlocks=");
-    PN5180DEBUG(*numBlocks);
-    PN5180DEBUG("\n");
-  }
-  if (infoFlags & 0x08) { // IC reference
-    uint8_t icRef = *p++;
-    PN5180DEBUG("IC Ref=");
-    PN5180DEBUG(formatHex(icRef));
-    PN5180DEBUG("\n");
-  }
- 
-  free(readBuffer);
-  return true;
-}
-
-/* 
- * ISO 15693 - Protocol
- * 
- * General Request Format:
- *  SOF, Req.Flags, Command code, Parameters, Data, CRC16, EOF
- * 
- *  Request Flags:
- *    xxxx.3210
- *         |||\_ Subcarrier flag: 0=single sub-carrier, 1=two sub-carrier
- *         ||\__ Datarate flag: 0=low data rate, 1=high data rate 
- *         |\___ Inventory flag: 0=no inventory, 1=inventory
- *         \____ Protocol extension flag: 0=no extension, 1=protocol format is extended
- *         
- *  If Inventory flag is set:
- *    7654.xxxx
- *     ||\_ AFI flag: 0=no AFI field present, 1=AFI field is present
- *     |\__ Number of slots flag: 0=16 slots, 1=1 slot
- *     \___ Option flag: 0=default, 1=meaning is defined by command description
- *     
- *  If Inventory flag is NOT set:
- *    7654.xxxx
- *     ||\_ Select flag: 0=request shall be executed by any VICC according to Address_flag
- *     ||                1=request shall be executed only by VICC in selected state 
- *     |\__ Address flag: 0=request is not addressed. UID field is not present. 
- *     |                  1=request is addressed. UID field is present. Only VICC with UID shall answer
- *     \___ Option flag: 0=default, 1=meaning is defined by command description
- *     
- * General Response Format:    
- *  SOF, Resp.Flags, Parameters, Data, CRC16, EOF
- *    
- *  Response Flags:
- *    xxxx.3210  
- *         |||\_ Error flag: 0=no error, 1=error detected, see error field
- *         ||\__ RFU: 0
- *         |\___ RFU: 0
- *         \____ Extension flag: 0=no extension, 1=protocol format is extended
- *         
- *  If Error flag is set, the following error codes are defined:
- *    01 = The command is not supported, i.e. the request code is not recognized.
- *    02 = The command is not recognized, i.e. a format error occured.
- *    03 = The option is not suppored.
- *    0F = Unknown error.
- *    10 = The specific block is not available.
- *    11 = The specific block is already locked and cannot be locked again.
- *    12 = The specific block is locked and cannot be changed.
- *    13 = The specific block was not successfully programmed.
- *    14 = The specific block was not successfully locked.
- *    A0-DF = Custom command error codes
- */ 
-bool PN5180::issueISO15693Command(uint8_t *cmd, uint8_t cmdLen, uint8_t **resultPtr) {
-#ifdef DEBUG  
-  PN5180DEBUG(F("Issue Command 0x"));
-  PN5180DEBUG(formatHex(cmd[1]));
-  PN5180DEBUG("...\n");
-#endif
-
-  sendData(cmd, cmdLen);
-  delay(10);  
-  
-//  while (!checkIRQ()); // wait for RX_IRQ to raise
-/*  
-  uint32_t irqStatus = getInterrupt();
-  if (irqStatus & (1<<0)) {
-    Serial.println("\tRQ_IRQ_STAT detected.");
-  }
-  else {
-    Serial.println("\tUNKNOWN IRQ state detected!");
-  }
-*/
-  uint32_t rxStatus;
-  readRegister(RX_STATUS, &rxStatus);
-
-#ifdef DEBUG  
-  PN5180DEBUG("RX-Status=");
-  PN5180DEBUG(formatHex(rxStatus));
-  if (rxStatus & (1<<16)) PN5180DEBUG(F("RX_DATA_INTEGRITY_ERROR"));
-  if (rxStatus & (1<<17)) PN5180DEBUG(F("RX_PROTOCOL_ERROR"));
-  if (rxStatus & (1<<18)) PN5180DEBUG(F("RX_COLLISION_DETECTED"));
-  Serial.flush();
-#endif
-  
-  /*
-  uint8_t frames = (uint8_t)((rxStatus >> 9) & 0x0000000f);
-  PN5180DEBUG(", frames=");
-  PN5180DEBUG(frames);
-  */
-  
-  uint16_t len = (uint16_t)(rxStatus & 0x000001ff);  
-  PN5180DEBUG(", len=");
-  PN5180DEBUG(len);
-  PN5180DEBUG("\n");
-  if (0 == len) return false;
-  if (511 == len) return false;
-  
-  *resultPtr = malloc(len);
-  readData(*resultPtr, len);
-#ifdef DEBUG  
-  Serial.print("Read=");
-  for (int i=0; i<len; i++) {
-    Serial.print(formatHex((*resultPtr)[i]));
-    if (i<len-1) Serial.print(":"); 
-  }
-  Serial.println();
-#endif
-      
-  uint8_t responseFlags = *resultPtr[0];
-  if (responseFlags & (1<<0)) { // error flag
-    PN5180DEBUG("ERROR code=");
-    PN5180DEBUG(formatHex(*resultPtr[1]));
-    PN5180DEBUG(" - ");
-    switch (*resultPtr[1]) {
-      case 0x01:
-        PN5180DEBUG(F("The command is not supported"));
-        break;
-      case 0x02:
-        PN5180DEBUG(F("The command is not recognised"));
-        break;
-      case 0x03:
-        PN5180DEBUG(F("The option is not supported"));
-        break;
-      case 0x0f:
-        PN5180DEBUG(F("Unknown error"));
-        break;
-      case 0x10:
-        PN5180DEBUG(F("The specified block is not available (doesn’t exist)"));
-        break;
-      case 0x11:
-        PN5180DEBUG(F("The specified block is already locked and thus cannot be locked again"));
-        break;
-      case 0x12:
-        PN5180DEBUG(F("The specified block is locked and its content cannot be changed"));
-        break;
-      case 0x13:
-        PN5180DEBUG(F("The specified block was not successfully programmed"));
-        break;
-      case 0x14:
-        PN5180DEBUG(F("The specified block was not successfully locked"));
-        break;
-      default:
-        PN5180DEBUG(F("Custom command error code"));
-        break;
-    }
-    PN5180DEBUG("\n");
-    free(*resultPtr);
-    
-    return false;
-  }
-  
-  if (responseFlags & 0x80) { // extendsion flag
-    PN5180DEBUG("Extension flag is set!\n");
-  }
-
-  return true;
-}
-
-//---------------------------------------------------------------------------------------------
-
 /*
  * WRITE_REGISTER - 0x00
+ * This command is used to write a 32-bit value (little endian) to a configuration register.
+ * The address of the register must exist. If the condition is not fulfilled, an exception is
+ * raised.
  */
 bool PN5180::writeRegister(uint8_t reg, uint32_t value) {
   uint8_t *p = (uint8_t*)&value;
 
 #ifdef DEBUG
-  PN5180DEBUG("Write Register 0x");
+  PN5180DEBUG(F("Write Register 0x"));
   PN5180DEBUG(formatHex(reg));
-  PN5180DEBUG(", value=");
-  PN5180DEBUG(formatHex(value));
-  /*
-  PN5180DEBUG(", (LSB first): ");
+  PN5180DEBUG(F(", value (LSB first)=0x"));
   for (int i=0; i<4; i++) {
     PN5180DEBUG(formatHex(p[i]));
-    PN5180DEBUG(" ");
   }
-  */
   PN5180DEBUG("\n");
 #endif
 
@@ -416,110 +77,127 @@ bool PN5180::writeRegister(uint8_t reg, uint32_t value) {
   sendSPIFrame(buf, 6);
   SPI.endTransaction();
   
-  return !checkIRQ();
+  return !isIRQ();
 }
 
 /*
  * WRITE_REGISTER_OR_MASK - 0x01
+ * This command modifies the content of a register using a logical OR operation. The
+ * content of the register is read and a logical OR operation is performed with the provided
+ * mask. The modified content is written back to the register.
+ * The address of the register must exist. If the condition is not fulfilled, an exception is
+ * raised.
  */
 bool PN5180::writeRegisterWithOrMask(uint8_t reg, uint32_t mask) {
   uint8_t *p = (uint8_t*)&mask;
 
 #ifdef DEBUG
-  PN5180DEBUG("Write Register 0x");
+  PN5180DEBUG(F("Write Register 0x"));
   PN5180DEBUG(formatHex(reg));
-  PN5180DEBUG(" with OR mask=");
-  PN5180DEBUG(formatHex(mask));
-  /*
-  PN5180DEBUG(", (LSB first): ");
+  PN5180DEBUG(F(" with OR mask (LSB first)=0x"));
   for (int i=0; i<4; i++) {
     PN5180DEBUG(formatHex(p[i]));
-    PN5180DEBUG(" ");
   }
-  */
   PN5180DEBUG("\n");
 #endif
-  
-  SPI.beginTransaction(PN5180_SPI_SETTINGS);  
+
   uint8_t buf[6] = { PN5180_WRITE_REGISTER_OR_MASK, reg, p[0], p[1], p[2], p[3] };
+
+  SPI.beginTransaction(PN5180_SPI_SETTINGS);  
   sendSPIFrame(buf, 6);
   SPI.endTransaction();
   
-  return !checkIRQ();
+  return !isIRQ();
 }
 
 /*
  * WRITE _REGISTER_AND_MASK - 0x02
+ * This command modifies the content of a register using a logical AND operation. The
+ * content of the register is read and a logical AND operation is performed with the provided
+ * mask. The modified content is written back to the register.
+ * The address of the register must exist. If the condition is not fulfilled, an exception is
+ * raised.
  */
 bool PN5180::writeRegisterWithAndMask(uint8_t reg, uint32_t mask) {
   uint8_t *p = (uint8_t*)&mask;
 
 #ifdef DEBUG  
-  PN5180DEBUG("Write Register 0x");
+  PN5180DEBUG(F("Write Register 0x"));
   PN5180DEBUG(formatHex(reg));
-  PN5180DEBUG(" with AND mask=");
-  PN5180DEBUG(formatHex(mask));
-  /*
+  PN5180DEBUG(F(" with AND mask (LSB first)=0x"));
   for (int i=0; i<4; i++) {
     PN5180DEBUG(formatHex(p[i]));
-    PN5180DEBUG(" ");
   }
-  */
   PN5180DEBUG("\n");
 #endif
-      
-  SPI.beginTransaction(PN5180_SPI_SETTINGS);  
+
   uint8_t buf[6] = { PN5180_WRITE_REGISTER_AND_MASK, reg, p[0], p[1], p[2], p[3] };
+
+  SPI.beginTransaction(PN5180_SPI_SETTINGS);  
   sendSPIFrame(buf, 6);
   SPI.endTransaction();
 
-  return !checkIRQ();
+  return !isIRQ();
 }
 
 /*
  * READ_REGISTER - 0x04
+ * This command is used to read the content of a configuration register. The content of the
+ * register is returned in the 4 byte response.
+ * The address of the register must exist. If the condition is not fulfilled, an exception is
+ * raised.
  */
 bool PN5180::readRegister(uint8_t reg, uint32_t *value) {
-  PN5180DEBUG("Reading register 0x");
+  PN5180DEBUG(F("Reading register 0x"));
   PN5180DEBUG(formatHex(reg));
-  PN5180DEBUG("\n");
+  PN5180DEBUG(F("...\n"));
   
-  SPI.beginTransaction(PN5180_SPI_SETTINGS);
   uint8_t cmd[2] = { PN5180_READ_REGISTER, reg };
+
+  SPI.beginTransaction(PN5180_SPI_SETTINGS);
   sendSPIFrame(cmd, 2);
   recvSPIFrame((uint8_t*)value, 4);
   SPI.endTransaction();
   
-  PN5180DEBUG("Register value=");
+  PN5180DEBUG(F("Register value=0x"));
   PN5180DEBUG(formatHex(*value));
   PN5180DEBUG("\n");
 
-  return !checkIRQ();
+  return !isIRQ();
 }
 
 /*
  * READ_EEPROM - 0x07
+ * This command is used to read data from EEPROM memory area. The field 'Address'
+ * indicates the start address of the read operation. The field Length indicates the number
+ * of bytes to read. The response contains the data read from EEPROM (content of the
+ * EEPROM); The data is read in sequentially increasing order starting with the given
+ * address.
+ * EEPROM Address must be in the range from 0 to 254, inclusive. Read operation must
+ * not go beyond EEPROM address 254. If the condition is not fulfilled, an exception is
+ * raised.
  */
 bool PN5180::readEprom(uint8_t addr, uint8_t *buffer, uint8_t len) {
-  PN5180DEBUG("Read EEPROM at 0x");
-  PN5180DEBUG(formatHex(addr));
-
   if ((addr > 254) || ((addr+len) > 254)) {
-    PN5180DEBUG("\nERROR: Reading beyond addr 254!\n");
+    PN5180DEBUG(F("ERROR: Reading beyond addr 254!\n"));
     return false;
   }
   
-  PN5180DEBUG(", size=");
+  PN5180DEBUG(F("Reading EEPROM at 0x"));
+  PN5180DEBUG(formatHex(addr));
+  PN5180DEBUG(F(", size="));
   PN5180DEBUG(len);
-  PN5180DEBUG(": ");
+  PN5180DEBUG(F("...\n"));
   
-  SPI.beginTransaction(PN5180_SPI_SETTINGS);
   uint8_t cmd[3] = { PN5180_READ_EEPROM, addr, len };
+
+  SPI.beginTransaction(PN5180_SPI_SETTINGS);
   sendSPIFrame(cmd, 3);
   recvSPIFrame(buffer, len);
   SPI.endTransaction();
 
 #ifdef DEBUG
+  PN5180DEBUG(F("EEPROM values: "));
   for (int i=0; i<len; i++) {
     PN5180DEBUG(formatHex(buffer[i]));
     PN5180DEBUG(" ");
@@ -527,27 +205,34 @@ bool PN5180::readEprom(uint8_t addr, uint8_t *buffer, uint8_t len) {
   PN5180DEBUG("\n");
 #endif
   
-  return !checkIRQ();
+  return !isIRQ();
 }
 
 /*
  * SEND_DATA - 0x09
+ * This command writes data to the RF transmission buffer and starts the RF transmission.
+ * The parameter ‘Number of valid bits in last Byte’ indicates the exact number of bits to be
+ * transmitted for the last byte (for non-byte aligned frames).
  * Precondition: Host shall configure the Transceiver by setting the register
  * SYSTEM_CONFIG.COMMAND to 0x3 before using the SEND_DATA command, as
  * the command SEND_DATA is only writing data to the transmission buffer and starts the
  * transmission but does not perform any configuration.
+ * The size of ‘Tx Data’ field must be in the range from 0 to 260, inclusive (the 0 byte length
+ * allows a symbol only transmission when the TX_DATA_ENABLE is cleared).‘Number of
+ * valid bits in last Byte’ field must be in the range from 0 to 7. The command must not be
+ * called during an ongoing RF transmission. Transceiver must be in ‘WaitTransmit’ state
+ * with ‘Transceive’ command set. If the condition is not fulfilled, an exception is raised.
  */
 bool PN5180::sendData(uint8_t *data, uint8_t len) {
-  PN5180DEBUG("Send data (len=");
-  PN5180DEBUG(len);
-  PN5180DEBUG("): ");
-
   if (len > 260) {
-    PN5180DEBUG("\nERROR: Sending more than 260 bytes is not supported!\n");
+    PN5180DEBUG(F("ERROR: sendData with more than 260 bytes is not supported!\n"));
     return false;
   }
   
 #ifdef DEBUG
+  PN5180DEBUG(F("Send data (len="));
+  PN5180DEBUG(len);
+  PN5180DEBUG(F("): "));
   for (int i=0; i<len; i++) {
     PN5180DEBUG(formatHex(data[i]));
     PN5180DEBUG(" ");
@@ -562,33 +247,60 @@ bool PN5180::sendData(uint8_t *data, uint8_t len) {
     buffer[2+i] = data[i];
   }
 
+  writeRegisterWithAndMask(SYSTEM_CONFIG, 0xfffffff8);  // Idle/StopCom Command
+  writeRegisterWithOrMask(SYSTEM_CONFIG, 0x00000003);   // Transceive Command
+  /*
+   * Transceive command; initiates a transceive cycle.
+   * Note: Depending on the value of the Initiator bit, a
+   * transmission is started or the receiver is enabled
+   * Note: The transceive command does not finish 
+   * automatically. It stays in the transceive cycle until
+   * stopped via the IDLE/StopCom command
+   */
+
+  PN5180TransceiveStat transceiveState = getTransceiveState();
+#ifdef DEBUG  
+  if (PN5180_TS_WaitTransmit != transceiveState) {
+    PN5180DEBUG(F("*** ERROR: Transceiver not in state WaitTransmit!?"));    
+  }
+#endif
+  
   SPI.beginTransaction(PN5180_SPI_SETTINGS);
   sendSPIFrame(buffer, len+2);
   SPI.endTransaction();
-  //return !checkIRQ();
-  return true;
+  
+  return !isIRQ();
 }
 
 /*
  * READ_DATA - 0x0A
+ * This command reads data from the RF reception buffer, after a successful reception.
+ * The RX_STATUS register contains the information to verify if the reception had been
+ * successful. The data is available within the response of the command. The host controls
+ * the number of bytes to be read via the SPI interface.
+ * The RF data had been successfully received. In case the instruction is executed without
+ * preceding an RF data reception, no exception is raised but the data read back from the
+ * reception buffer is invalid. If the condition is not fulfilled, an exception is raised.
  */
 bool PN5180::readData(uint8_t *buffer, uint16_t len) {
-  PN5180DEBUG("Read Data (len=");
-  PN5180DEBUG(len);
-  PN5180DEBUG("): ");
-
   if (len > 508) {
     PN5180DEBUG("\nERROR: Reading more than 508 bytes is not supported!\n");
     return false;
   }
   
+  PN5180DEBUG(F("Reading Data (len="));
+  PN5180DEBUG(len);
+  PN5180DEBUG(F(")...\n"));
+
   uint8_t cmd[2] = { PN5180_READ_DATA, 0x00 };
+  
   SPI.beginTransaction(PN5180_SPI_SETTINGS);
   sendSPIFrame(cmd, 2);
   recvSPIFrame(buffer, len);
   SPI.endTransaction();
 
 #ifdef DEBUG
+  PN5180DEBUG(F("Data read: "));
   for (int i=0; i<len; i++) {
     PN5180DEBUG(formatHex(buffer[i]));
     PN5180DEBUG(" ");
@@ -596,15 +308,20 @@ bool PN5180::readData(uint8_t *buffer, uint16_t len) {
   PN5180DEBUG("\n");
 #endif  
 
-  //return !checkIRQ();
-  return true;
+  return !isIRQ();
 }
 
 /*
  * LOAD_RF_CONFIG - 0x11
+ * Parameter 'Transmitter Configuration' must be in the range from 0x0 - 0x1C, inclusive. If
+ * the transmitter parameter is 0xFF, transmitter configuration is not changed.
+ * Field 'Receiver Configuration' must be in the range from 0x80 - 0x9C, inclusive. If the
+ * receiver parameter is 0xFF, the receiver configuration is not changed. If the condition is
+ * not fulfilled, an exception is raised.
+ * The transmitter and receiver configuration shall always be configured for the same
+ * transmission/reception speed. No error is returned in case this condition is not taken into
+ * account.
  * 
- * The parameter 0xFF has to be used if the corresponding configuration shall not be changed.
- *
  * Transmitter: RF   Protocol          Speed     Receiver: RF    Protocol    Speed 
  * configuration                       (kbit/s)  configuration               (kbit/s)
  * byte (hex)                                    byte (hex)
@@ -613,45 +330,53 @@ bool PN5180::readData(uint8_t *buffer, uint16_t len) {
  *   0E              ISO 15693 ASK10   26        8E              ISO 15693   53
  */
 bool PN5180::loadRFConfig(uint8_t txConf, uint8_t rxConf) {
-  PN5180DEBUG("Load RF-Config: txConf=");
+  PN5180DEBUG(F("Load RF-Config: txConf="));
   PN5180DEBUG(formatHex(txConf));
-  PN5180DEBUG(", rxConf=");
+  PN5180DEBUG(F(", rxConf="));
   PN5180DEBUG(formatHex(rxConf));
   PN5180DEBUG("\n");
   
-  SPI.beginTransaction(PN5180_SPI_SETTINGS);
   uint8_t cmd[3] = { PN5180_LOAD_RF_CONFIG, txConf, rxConf };
+
+  SPI.beginTransaction(PN5180_SPI_SETTINGS);
   sendSPIFrame(cmd, 3);
   SPI.endTransaction();
-  //return !checkIRQ();
-  return true;
+
+  return !isIRQ();
 }
 
 /*
  * RF_ON - 0x16
+ * This command is used to switch on the internal RF field. If enabled the TX_RFON_IRQ is
+ * set after the field is switched on.
  */
 bool PN5180::setRF_on() {
-  PN5180DEBUG("Set RF ON\n");
+  PN5180DEBUG(F("Set RF ON\n"));
   
-  SPI.beginTransaction(PN5180_SPI_SETTINGS);
   uint8_t cmd[2] = { PN5180_RF_ON, 0x00 };
+
+  SPI.beginTransaction(PN5180_SPI_SETTINGS);
   sendSPIFrame(cmd, 2);
   SPI.endTransaction();
-  //return !checkIRQ();
-  return true;
+ 
+  return !isIRQ();
 }
 
 /*
  * RF_OFF - 0x17
+ * This command is used to switch off the internal RF field. If enabled, the TX_RFOFF_IRQ
+ * is set after the field is switched off.
  */
 bool PN5180::setRF_off() {
-  PN5180DEBUG("Set RF OFF\n");
+  PN5180DEBUG(F("Set RF OFF\n"));
   
-  SPI.beginTransaction(PN5180_SPI_SETTINGS);
   uint8_t cmd[2] { PN5180_RF_OFF, 0x00 };
+
+  SPI.beginTransaction(PN5180_SPI_SETTINGS);
   sendSPIFrame(cmd, 2);
   SPI.endTransaction();
-  return !checkIRQ();
+  
+  return !isIRQ();
 }
 
 //---------------------------------------------------------------------------------------------
@@ -676,26 +401,37 @@ status register contain information on the exception.
 */
  
 /*
-The BUSY line is used to indicate that the system is BUSY and cannot receive any data
-from a host. Recommendation for the BUSY line handling by the host:
-1. Assert NSS to Low
-2. Perform Data Exchange
-3. Wait until BUSY is high
-4. Deassert NSS
-5. Wait until BUSY is low
-
-If there is a parameter error, the IRQ is set to ACTIVE and a
-GENERAL_ERROR_IRQ is set.
-*/
+ * A Host Interface Command consists of either 1 or 2 SPI frames depending whether the
+ * host wants to write or read data from the PN5180. An SPI Frame consists of multiple
+ * bytes.
+ * All commands are packed into one SPI Frame. An SPI Frame consists of multiple bytes.
+ * No NSS toggles allowed during sending of an SPI frame.
+ * For all 4 byte command parameter transfers (e.g. register values), the payload
+ * parameters passed follow the little endian approach (Least Significant Byte first).
+ * The BUSY line is used to indicate that the system is BUSY and cannot receive any data
+ * from a host. Recommendation for the BUSY line handling by the host:
+ * 1. Assert NSS to Low
+ * 2. Perform Data Exchange
+ * 3. Wait until BUSY is high
+ * 4. Deassert NSS
+ * 5. Wait until BUSY is low
+ * If there is a parameter error, the IRQ is set to ACTIVE and a GENERAL_ERROR_IRQ is set.
+ */
 bool PN5180::sendSPIFrame(uint8_t *sendBuffer, uint8_t sendBufferLen) {
-  PN5180DEBUG("Sending SPI frame: ");
-
+#ifdef DEBUG  
+  PN5180DEBUG(F("Sending SPI frame: '"));
+  for (uint8_t i=0; i<sendBufferLen; i++) {
+    if (i > 0) PN5180DEBUG(" ");
+    PN5180DEBUG(formatHex(sendBuffer[i]));
+  }
+  PN5180DEBUG("'\n");
+#endif
+  
   // 1.
   digitalWrite(PN5180_NSS, LOW);
   // 2.
   for (uint8_t i=0; i<sendBufferLen; i++) {
     SPI.transfer(sendBuffer[i]);
-    PN5180DEBUG(formatHex(sendBuffer[i]));
   }
   // 3.
   while(LOW == digitalRead(PN5180_BUSY));  // wait until BUSY is high
@@ -703,23 +439,21 @@ bool PN5180::sendSPIFrame(uint8_t *sendBuffer, uint8_t sendBufferLen) {
   digitalWrite(PN5180_NSS, HIGH);
   // 5.
   while (HIGH == digitalRead(PN5180_BUSY)); // wait unitl BUSY is low
-  PN5180DEBUG("\n");
 
-  return !checkIRQ();
+  return !isIRQ();
 }
 
 /*
 In order read data from the PN5180, "dummy reads" shall be performed.
  */
 bool PN5180::recvSPIFrame(uint8_t *recvBuffer, uint8_t recvBufferLen) {
-  PN5180DEBUG("Reading SPI frame: ");
+  PN5180DEBUG(F("Receiving SPI frame...\n"));
 
   // 1.
   digitalWrite(PN5180_NSS, LOW);
   // 2.
   for (uint8_t i=0; i<recvBufferLen; i++) {
     recvBuffer[i] = SPI.transfer(0xff);
-    PN5180DEBUG(formatHex(recvBuffer[i]));
   }
   // 3.
   while(LOW == digitalRead(PN5180_BUSY));  // wait until BUSY is high
@@ -727,15 +461,24 @@ bool PN5180::recvSPIFrame(uint8_t *recvBuffer, uint8_t recvBufferLen) {
   digitalWrite(PN5180_NSS, HIGH);
   // 5.
   while(HIGH == digitalRead(PN5180_BUSY));  // wait until BUSY is low
-  PN5180DEBUG("\n");
 
-  return !checkIRQ();
+#ifdef DEBUG  
+  PN5180DEBUG(F("Received: "));
+  for (uint8_t i=0; i<recvBufferLen; i++) {
+    if (i > 0) PN5180DEBUG(" ");
+    PN5180DEBUG(formatHex(recvBuffer[i]));
+  }
+  PN5180DEBUG("'\n");
+#endif
+
+  return !isIRQ();
 }
 
-bool PN5180::checkIRQ() {
-  // check IRQ for error
+/*
+ * Check signaled interrupt on IRQ pin
+ */
+bool PN5180::isIRQ() {
   if (HIGH == digitalRead(PN5180_IRQ)) {
-//    PN5180DEBUG("ERROR detected: IRQ is set!\n");
     return true;
   }
   else return false; // no IRQ
@@ -745,32 +488,35 @@ bool PN5180::checkIRQ() {
  * @name  getInterrrupt
  * @desc  read interrupt status register and clear interrupt status
  */
-uint32_t PN5180::getInterrupt() {
+uint32_t PN5180::getIRQStatus() {
   PN5180DEBUG(F("Read IRQ-Status register...\n"));
   
   uint32_t irqStatus;
   readRegister(IRQ_STATUS, &irqStatus);
-  PN5180DEBUG("IRQ-Status=");
+  PN5180DEBUG(F("IRQ-Status=0x"));
   PN5180DEBUG(formatHex(irqStatus));
   PN5180DEBUG("\n");
   
   // clear IRQ status
-  writeRegister(IRQ_CLEAR, irqStatus);
+  //writeRegister(IRQ_CLEAR, irqStatus);
 
   return irqStatus;
 }
 
-uint8_t PN5180::getTransceiveState() {
-  PN5180DEBUG("Get Transceive state...\n");
+/*
+ * Get TRANSCEIVE_STATE from RF_STATUS register
+ */
+PN5180TransceiveStat PN5180::getTransceiveState() {
+  PN5180DEBUG(F("Get Transceive state...\n"));
 
   uint32_t rfStatus;
   if (!readRegister(RF_STATUS, &rfStatus)) {
-    PN5180DEBUG("ERROR reading RF_STATUS register.\n");
+    PN5180DEBUG(F("ERROR reading RF_STATUS register.\n"));
     return 0;
   }
 
   /*
-   * TRANSCEIVE_STATE
+   * TRANSCEIVE_STATEs:
    *  0 - idle
    *  1 - wait transmit 
    *  2 - transmitting
@@ -781,48 +527,9 @@ uint8_t PN5180::getTransceiveState() {
    *  7 - reserved
    */
   uint8_t state = ((rfStatus >> 24) & 0x07);
-  PN5180DEBUG("state=");
+  PN5180DEBUG(F("TRANSCEIVE_STATE=0x"));
   PN5180DEBUG(formatHex(state));
   PN5180DEBUG("\n");
 
   return state;
 }
-
-//---------------------------------------------------------------------------------------------
-
-#ifdef DEBUG
-String PN5180::formatHex(const uint8_t val) {
-  const char hexChar[] = "0123456789ABCDEF";
-  
-  uint8_t hi = (val & 0xf0) >> 4;
-  uint8_t lo = (val & 0x0f);
-  
-  String s = ""; 
-  s += hexChar[hi];
-  s += hexChar[lo];
-
-  return s;
-}
-
-String PN5180::formatHex(const uint16_t val) {
-  uint8_t hi = (val & 0xff00) >> 8;
-  uint8_t lo = (val & 0x00ff);
-
-  String s = "";
-  s += formatHex(hi);
-  s += formatHex(lo);
-
-  return s;
-}
-
-String PN5180::formatHex(const uint32_t val) {
-  uint16_t hi = (val & 0xffff0000) >> 16;
-  uint16_t lo = (val & 0x0000ffff);
-
-  String s = "";
-  s += formatHex(hi);
-  s += formatHex(lo);
-
-  return s;
-}
-#endif /* DEBUG */
