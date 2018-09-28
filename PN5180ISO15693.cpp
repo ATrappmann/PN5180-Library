@@ -7,6 +7,7 @@
 #include <inttypes.h>
 #include "PN5180ISO15693.h"
 #include "Debug.h"
+#include <Arduino.h>
 
 PN5180ISO15693::PN5180ISO15693(PN5180 *nfc) {
   this->nfc = nfc;
@@ -295,7 +296,7 @@ bool PN5180ISO15693::issueISO15693Command(uint8_t *cmd, uint8_t cmdLen, uint8_t 
   if (0 == len) return false;
   if (511 == len) return false;
   
-  *resultPtr = malloc(len);
+  *resultPtr = (uint8_t *)malloc(len);
   nfc->readData(*resultPtr, len);
 #ifdef DEBUG  
   Serial.print("Read=");
