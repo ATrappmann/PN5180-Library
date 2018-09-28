@@ -2,13 +2,7 @@
 //
 // DESC: Helper functions for debugging
 //
-<<<<<<< HEAD
 #include <inttypes.h>
-=======
-
-#include <inttypes.h>
-#include <Wstring.h>
->>>>>>> 3dd96694226e6e15600c7a160eeb6c93e834ca98
 #include "Debug.h"
 
 static const char hexChar[] = "0123456789ABCDEF";
