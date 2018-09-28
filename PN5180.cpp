@@ -9,10 +9,7 @@
 #include "Debug.h" 
 #include <Arduino.h>
 
-#ifdef ARDUINO_ARCH_ESP32
-  // ESP-32 compatibility
-  #define MSBFIRST SPI_MSBFIRST
-#endif
+
 
 // PN5180 1-Byte Direct Commands
 // see 11.4.3.3 Host Interface Command List
