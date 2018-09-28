@@ -3,7 +3,8 @@
 // DESC: Helper functions for debugging
 //
 
-#include <Arduino.h>
+#include <inttypes.h>
+#include <Wstring.h>
 #include "Debug.h"
 
 String formatHex(const uint8_t val) {
