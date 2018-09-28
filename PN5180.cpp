@@ -7,6 +7,9 @@
 #include <inttypes.h>
 #include "PN5180.h"
 #include "Debug.h" 
+#include <Arduino.h>
+
+
 
 // PN5180 1-Byte Direct Commands
 // see 11.4.3.3 Host Interface Command List
@@ -537,7 +540,7 @@ PN5180TransceiveStat PN5180::getTransceiveState() {
   uint32_t rfStatus;
   if (!readRegister(RF_STATUS, &rfStatus)) {
     PN5180DEBUG(F("ERROR reading RF_STATUS register.\n"));
-    return 0;
+    return PN5180TransceiveStat(0);
   }
 
   /*
@@ -556,5 +559,5 @@ PN5180TransceiveStat PN5180::getTransceiveState() {
   PN5180DEBUG(formatHex(state));
   PN5180DEBUG("\n");
 
-  return state;
+  return PN5180TransceiveStat(state);
 }

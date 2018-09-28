@@ -44,13 +44,34 @@
  * 13   REQ     2?  I/O   AUX2 - Analog test bus or download
  * 
  */
+ 
+// ESP-32 <-> PN5180 pin mapping: 
+//
+// SCLK, 18                     --> SCLK
+// MISO, 19                     <-- MISO
+// MOSI, 23                     --> MOSI
+// SS, 16                       --> NSS (=Not SS -> active LOW)
+// BUSY, 5                      <-- BUSY
+// IRQ, not used
+// Reset, 17                    --> RST
+// 
+
 #include <PN5180.h>
 #include <PN5180ISO15693.h>
 
+// Arduino UNO
 #define PN5180_NSS  10
 #define PN5180_BUSY 9
 #define PN5180_IRQ  8
 #define PN5180_RST  7
+
+/*
+  // ESP-32 
+  #define PN5180_NSS  16
+  #define PN5180_BUSY 5
+  #define PN5180_IRQ  -1
+  #define PN5180_RST  17
+*/ 
 
 // Onboard LED
 #define RF_LED LED_BUILTIN
