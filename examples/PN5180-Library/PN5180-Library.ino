@@ -55,23 +55,36 @@
 // Onboard LED
 #define RF_LED LED_BUILTIN
 
-PN5180 nfc(PN5180_NSS, PN5180_BUSY, PN5180_IRQ);
+PN5180 nfc(PN5180_NSS, PN5180_BUSY, PN5180_RST, PN5180_IRQ);
 PN5180ISO15693 isoNfc(&nfc);
 
 void setup() {
   pinMode(RF_LED, OUTPUT);
   pinMode(PN5180_RST, OUTPUT);
-  
+
   Serial.begin(115200);
   Serial.println(F("=================================="));
   Serial.println(F("Uploaded: " __DATE__ " " __TIME__));
 
-  resetNFC();
+  nfc.begin();
+
+  Serial.println(F("----------------------------------"));
+  Serial.println(F("PN5180 Hard-Reset..."));
+  nfc.reset();
+  if (nfc.isIRQ()) {
+    showIRQStatus();
+    nfc.end();
+    Serial.println(F("ERROR: Card not responding!?"));
+    Serial.println(F("Done. -- Press RESET to continue..."));
+    Serial.flush();
+    Serial.end();
+    exit(0);
+  }
   
   Serial.println(F("----------------------------------"));
   Serial.println(F("Reading product version..."));
   uint8_t productVersion[2];
-  if (nfc.readEprom(PRODUCT_VERSION, productVersion, sizeof(productVersion))) {
+  if (nfc.readEEprom(PRODUCT_VERSION, productVersion, sizeof(productVersion))) {
     Serial.print(F("Product version="));
     Serial.print(productVersion[1]);
     Serial.print(".");
@@ -82,7 +95,7 @@ void setup() {
   Serial.println(F("----------------------------------"));
   Serial.println(F("Reading firmware version..."));
   uint8_t firmwareVersion[2];
-  if (nfc.readEprom(FIRMWARE_VERSION, firmwareVersion, sizeof(firmwareVersion))) {
+  if (nfc.readEEprom(FIRMWARE_VERSION, firmwareVersion, sizeof(firmwareVersion))) {
     Serial.print(F("Firmware version="));
     Serial.print(firmwareVersion[1]);
     Serial.print(".");
@@ -93,7 +106,7 @@ void setup() {
   Serial.println(F("----------------------------------"));
   Serial.println(F("Reading EEPROM version..."));
   uint8_t eepromVersion[2];
-  if (nfc.readEprom(EEPROM_VERSION, eepromVersion, sizeof(eepromVersion))) {
+  if (nfc.readEEprom(EEPROM_VERSION, eepromVersion, sizeof(eepromVersion))) {
     Serial.print(F("EEPROM version="));
     Serial.print(eepromVersion[1]);
     Serial.print(".");
@@ -104,7 +117,7 @@ void setup() {
   Serial.println(F("----------------------------------"));
   Serial.println(F("Reading IRQ pin config..."));
   uint8_t irqConfig;
-  if (nfc.readEprom(IRQ_PIN_CONFIG, &irqConfig, 1)) {
+  if (nfc.readEEprom(IRQ_PIN_CONFIG, &irqConfig, 1)) {
     Serial.print(F("IRQ_PIN_CONFIG=0x"));
     Serial.println(irqConfig, HEX);
   }
@@ -119,6 +132,8 @@ void setup() {
   }
   else showIRQStatus();
 
+  Serial.println(F("----------------------------------"));
+  Serial.println(F("Enable RF field..."));
   isoNfc.setupRF();
   digitalWrite(RF_LED, HIGH);
 }
@@ -126,83 +141,86 @@ void setup() {
 uint32_t loopCnt = 0;
 
 void loop() {
- 
   Serial.println(F("----------------------------------"));
   Serial.print(F("Loop #"));
   Serial.println(loopCnt++);
 
   Serial.print(F("Check IRQ signal: "));
   Serial.println((nfc.isIRQ()?"HIGH":"LOW"));
-  showIRQStatus();
+  if (!nfc.isIRQ()) {
+    uint8_t uid[8];
+    bool rc = isoNfc.getInventory(uid);
+    uint32_t irqStatus = nfc.getIRQStatus();
+    if (0 == irqStatus) {
+      Serial.print(F("Inventory successful, uid="));
+      for (int i=0; i<8; i++) {
+        Serial.print(uid[7-i], HEX); // LSB is first
+        if (i < 2) Serial.print(":");
+      }
+      Serial.println();
   
-  uint8_t uid[8];
-  if (isoNfc.getInventory(uid)) {
-    Serial.print(F("Inventory successful, uid="));
-    for (int i=0; i<8; i++) {
-      Serial.print(uid[7-i], HEX); // LSB is first
-      if (i < 2) Serial.print(":");
-    }
-    Serial.println();
-
-    uint8_t blockSize, numBlocks;
-    if (isoNfc.getSystemInfo(uid, &blockSize, &numBlocks)) {
-      Serial.println(F("System Info retrieved"));
-
-      uint8_t readBuffer[blockSize];
-      for (int no=0; no<numBlocks; no++) {
-        if (isoNfc.readSingleBlock(uid, no, readBuffer, blockSize)) {
-          Serial.print(F("Read block #"));
-          Serial.print(no);
-          Serial.print(": ");
-          for (int i=0; i<blockSize; i++) {
-            if (readBuffer[i] < 16) Serial.print("0");
-            Serial.print(readBuffer[i], HEX);
-            Serial.print(" ");
-          }
-          Serial.print(" ");
-          for (int i=0; i<blockSize; i++) {
-            if (isprint(readBuffer[i])) {
-              Serial.print((char)readBuffer[i]);
+      uint8_t blockSize, numBlocks;
+      if (isoNfc.getSystemInfo(uid, &blockSize, &numBlocks)) {
+        Serial.print(F("System Info retrieved: blockSize="));
+        Serial.print(blockSize);
+        Serial.print(F(", numBlocks="));
+        Serial.println(numBlocks);
+  
+        uint8_t readBuffer[blockSize];
+        for (int no=0; no<numBlocks; no++) {
+          if (isoNfc.readSingleBlock(uid, no, readBuffer, blockSize)) {
+            Serial.print(F("Read block #"));
+            Serial.print(no);
+            Serial.print(": ");
+            for (int i=0; i<blockSize; i++) {
+              if (readBuffer[i] < 16) Serial.print("0");
+              Serial.print(readBuffer[i], HEX);
+              Serial.print(" ");
             }
-            else Serial.print(".");
+            Serial.print(" ");
+            for (int i=0; i<blockSize; i++) {
+              if (isprint(readBuffer[i])) {
+                Serial.print((char)readBuffer[i]);
+              }
+              else Serial.print(".");
+            }
+            Serial.println();          
           }
-          Serial.println();          
-        }
-        else {
-          Serial.println(F("Error in readSingleBlock!"));
-          showIRQStatus();
-        }
-      }  
+          else {
+            Serial.println(F("Error in readSingleBlock!"));
+            showIRQStatus();
+            nfc.clearIRQStatus(0xffffffff);
+            break;
+          }
+        }  
+      }
+      else {
+        Serial.println(F("Error in getSystemInfo!"));
+        showIRQStatus();
+        nfc.clearIRQStatus(0xffffffff);
+      }
+    }
+    else if (0 == (RX_SOF_DET_IRQ_STAT & irqStatus)) { // no card detected
+      Serial.println(F("No card!"));
+      nfc.clearIRQStatus(RX_SOF_DET_IRQ_STAT | TX_IRQ_STAT | IDLE_IRQ_STAT);
+      delay(2000);
     }
     else {
-      Serial.println(F("Error in getSystemInfo!"));
+      Serial.println(F("Error in getInventory!"));
       showIRQStatus();
+      nfc.reset();
+      isoNfc.setupRF();
+      delay(2000);
     }
   }
   else {
-    Serial.println(F("Error in getInventory!"));
-    showIRQStatus();
-    resetNFC();
-    isoNfc.setupRF();
+      showIRQStatus();
+      nfc.reset();
+      isoNfc.setupRF();
+      delay(2000);
   }
-
-  delay(1000);
-}
-
-void resetNFC() {
-  Serial.println(F("----------------------------------"));
-  Serial.println(F("PN5180 Hard-Reset..."));
-  digitalWrite(PN5180_RST, LOW);  // at least 10us required
-  delay(20);
-  digitalWrite(PN5180_RST, HIGH); // 2ms to ramp up required
-  delay(20);
   
-  Serial.println(F("----------------------------------"));
-  Serial.print(F("Check IRQ signal: "));
-  Serial.println((nfc.isIRQ()?"HIGH":"LOW"));
-  showIRQStatus();
-  Serial.print(F("IRQ signal is now: "));
-  Serial.println((nfc.isIRQ()?"HIGH":"LOW"));  
+  delay(1000);
 }
 
 void showIRQStatus() {

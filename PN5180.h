@@ -40,17 +40,31 @@ enum PN5180TransceiveStat {
   PN5180_TS_RESERVED = 7
 };
 
+// PN5180 IRQ_STATUS
+#define RX_IRQ_STAT         (1<<0)  // End of RF rececption IRQ
+#define TX_IRQ_STAT         (1<<1)  // End of RF transmission IRQ
+#define IDLE_IRQ_STAT       (1<<2)  // IDLE IRQ
+#define RFOFF_DET_IRQ_STAT  (1<<6)  // RF Field OFF detection IRQ
+#define RFON_DET_IRQ_STAT   (1<<7)  // RF Field ON detection IRQ
+#define TX_RFOFF_IRQ_STAT   (1<<8)  // RF Field OFF in PCD IRQ
+#define TX_RFON_IRQ_STAT    (1<<9)  // RF Field ON in PCD IRQ
+#define RX_SOF_DET_IRQ_STAT (1<<14) // RF SOF Detection IRQ
+
 class PN5180 {
 private:
   uint8_t PN5180_NSS;   // active low
   uint8_t PN5180_BUSY;
+  uint8_t PN5180_RST;
   uint8_t PN5180_IRQ;
 
   SPISettings PN5180_SPI_SETTINGS;
   
 public:
-  PN5180(uint8_t SSpin, uint8_t BUSYpin, uint8_t IRQpin);
-
+  PN5180(uint8_t SSpin, uint8_t BUSYpin, uint8_t RSTpin = 0, uint8_t IRQpin = 0);
+  
+  void begin();
+  void end();
+  
   /*
    * PN5180 direct commands with host interface
    */
@@ -66,7 +80,7 @@ public:
   bool readRegister(uint8_t reg, uint32_t *value);
 
   /* cmd 0x07 */
-  bool readEprom(uint8_t addr, uint8_t *buffer, uint8_t len);
+  bool readEEprom(uint8_t addr, uint8_t *buffer, uint8_t len);
 
   /* cmd 0x09 */
   bool sendData(uint8_t *data, uint8_t len);
@@ -85,16 +99,20 @@ public:
    * Helper functions
    */
 public:
+  void reset();
+
   bool isIRQ();
   uint32_t getIRQStatus();
+  bool clearIRQStatus(uint32_t irqMask);
+  
   PN5180TransceiveStat getTransceiveState();
      
   /*
    * Private methods, called within an SPI transaction
    */
 private:
-  bool sendSPIFrame(uint8_t *sendBuffer, uint8_t sendBufferLen);
-  bool recvSPIFrame(uint8_t *recvBuffer, uint8_t recvBufferLen);
+  bool transceiveCommand(uint8_t *sendBuffer, size_t sendBufferLen, uint8_t *recvBuffer = 0, size_t recvBufferLen = 0);
+
 };
 
 #endif /* PN5180_H */

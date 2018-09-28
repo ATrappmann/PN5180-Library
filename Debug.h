@@ -11,9 +11,9 @@
 #endif
 
 #ifdef DEBUG
-extern String formatHex(const uint8_t val);
-extern String formatHex(const uint16_t val);
-extern String formatHex(const uint32_t val);
+extern char * formatHex(const uint8_t val);
+extern char * formatHex(const uint16_t val);
+extern char * formatHex(const uint32_t val);
 #endif
 
 #endif /* DEBUG_H */

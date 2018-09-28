@@ -2,9 +2,9 @@
 //
 // DESC: ISO15693 protocol on NXP Semiconductors PN5180 module for Arduino.
 //
-#define DEBUG 1
+//#define DEBUG 1
 
-#include <Arduino.h>
+#include <inttypes.h>
 #include "PN5180ISO15693.h"
 #include "Debug.h"
 
@@ -32,6 +32,12 @@ bool PN5180ISO15693::getInventory(uint8_t *uid) {
     return false;
   }
 
+  uint32_t irqStatus = nfc->getIRQStatus();
+  if (0 == (RX_SOF_DET_IRQ_STAT & irqStatus)) { // no card detected
+     nfc->clearIRQStatus(TX_IRQ_STAT | IDLE_IRQ_STAT);
+     return false;
+  }
+  
   PN5180DEBUG(F("Response flags: "));
   PN5180DEBUG(formatHex(readBuffer[0]));
   PN5180DEBUG(F(", Data Storage Format ID: "));
@@ -45,7 +51,8 @@ bool PN5180ISO15693::getInventory(uint8_t *uid) {
   PN5180DEBUG("\n");
 
   free(readBuffer);
-  return true;
+  nfc->clearIRQStatus(RX_SOF_DET_IRQ_STAT | IDLE_IRQ_STAT | TX_IRQ_STAT | RX_IRQ_STAT);
+  return !nfc->isIRQ();
 }
 
 /*
@@ -80,6 +87,12 @@ bool PN5180ISO15693::readSingleBlock(uint8_t *uid, uint8_t blockNo, uint8_t *rea
     return false;
   }
 
+  uint32_t irqStatus = nfc->getIRQStatus();
+  if (0 == (RX_SOF_DET_IRQ_STAT & irqStatus)) { // no card detected
+     nfc->clearIRQStatus(TX_IRQ_STAT | IDLE_IRQ_STAT);
+     return false;
+  }
+
   uint8_t flags = readBuffer[0];
   if (flags & 0x01) { // check error flag
     PN5180DEBUG(F("ERROR_FLAG is set!"));
@@ -104,7 +117,8 @@ bool PN5180ISO15693::readSingleBlock(uint8_t *uid, uint8_t blockNo, uint8_t *rea
   PN5180DEBUG("\n");
 
   free(resultPtr);
-  return true;
+  nfc->clearIRQStatus(RX_SOF_DET_IRQ_STAT | IDLE_IRQ_STAT | TX_IRQ_STAT | RX_IRQ_STAT);
+  return !nfc->isIRQ();
 }
 
 /*
@@ -133,6 +147,12 @@ bool PN5180ISO15693::getSystemInfo(uint8_t *uid, uint8_t *blockSize, uint8_t *nu
   uint8_t *readBuffer;
   if (!issueISO15693Command(sysInfo, sizeof(sysInfo), &readBuffer)) {
     return false;
+  }
+
+  uint32_t irqStatus = nfc->getIRQStatus();
+  if (0 == (RX_SOF_DET_IRQ_STAT & irqStatus)) { // no card detected
+     nfc->clearIRQStatus(TX_IRQ_STAT | IDLE_IRQ_STAT);
+     return false;
   }
 
   for (int i=0; i<8; i++) {
@@ -189,7 +209,8 @@ bool PN5180ISO15693::getSystemInfo(uint8_t *uid, uint8_t *blockSize, uint8_t *nu
   }
  
   free(readBuffer);
-  return true;
+  nfc->clearIRQStatus(RX_SOF_DET_IRQ_STAT | IDLE_IRQ_STAT | TX_IRQ_STAT | RX_IRQ_STAT);
+  return !nfc->isIRQ();
 }
 
 /* 
