@@ -83,7 +83,7 @@ public:
   bool readEEprom(uint8_t addr, uint8_t *buffer, uint8_t len);
 
   /* cmd 0x09 */
-  bool sendData(uint8_t *data, uint8_t len);
+  bool sendData(uint8_t *data, uint8_t len, uint8_t validBits = 0);
   /* cmd 0x0a */
   bool readData(uint8_t *buffer, uint16_t len);
 
