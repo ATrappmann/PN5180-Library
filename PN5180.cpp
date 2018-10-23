@@ -238,7 +238,7 @@ bool PN5180::readEEprom(uint8_t addr, uint8_t *buffer, uint8_t len) {
  * called during an ongoing RF transmission. Transceiver must be in ‘WaitTransmit’ state
  * with ‘Transceive’ command set. If the condition is not fulfilled, an exception is raised.
  */
-bool PN5180::sendData(uint8_t *data, uint8_t len) {
+bool PN5180::sendData(uint8_t *data, uint8_t len, uint8_t validBits) {
   if (len > 260) {
     PN5180DEBUG(F("ERROR: sendData with more than 260 bytes is not supported!\n"));
     return false;
@@ -257,7 +257,7 @@ bool PN5180::sendData(uint8_t *data, uint8_t len) {
 
   uint8_t buffer[len+2];
   buffer[0] = PN5180_SEND_DATA;
-  buffer[1] = 0; // all bits of last byte are transmitted
+  buffer[1] = validBits; // number of valid bits of last byte are transmitted (0 = all bits are transmitted)
   for (uint8_t i=0; i<len; i++) {
     buffer[2+i] = data[i];
   }

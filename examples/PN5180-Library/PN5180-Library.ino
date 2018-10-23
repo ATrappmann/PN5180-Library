@@ -246,7 +246,7 @@ void loop() {
 #endif /* WRITE_ENABLED */        
   goto done;
   
-error:
+error: {
   uint32_t irqStatus = nfc.getIRQStatus();
   if (0 == (RX_SOF_DET_IRQ_STAT & irqStatus)) { // no card detected
     Serial.println(F("*** No card detected!"));
@@ -254,6 +254,7 @@ error:
   showIRQStatus();
   nfc.reset();
   nfc.setupRF();
+  }
 
 done:  
   delay(1000);
