@@ -185,7 +185,7 @@ ISO15693ErrorCode PN5180ISO15693::writeSingleBlock(uint8_t *uid, uint8_t blockNo
   //                               \-- options, addressed by UID
 
   uint8_t writeCmdSize = sizeof(writeSingleBlock) + blockSize;
-  uint8_t *writeCmd = malloc(writeCmdSize);
+  uint8_t *writeCmd = (uint8_t*)malloc(writeCmdSize);
   uint8_t pos = 0;
   writeCmd[pos++] = writeSingleBlock[0];
   writeCmd[pos++] = writeSingleBlock[1];
