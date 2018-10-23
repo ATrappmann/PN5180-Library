@@ -1,15 +1,26 @@
 // NAME: PN5180.cpp
 //
-// DESC:
+// DESC: Implementation of PN5180 class.
 //
-// #define DEBUG 1
+// Copyright (c) 2018 by Andreas Trappmann. All rights reserved.
+//
+// This file is part of the PN5180 library for the Arduino environment.
+//
+// This library is free software; you can redistribute it and/or
+// modify it under the terms of the GNU Lesser General Public
+// License as published by the Free Software Foundation; either
+// version 2.1 of the License, or (at your option) any later version.
+//
+// This library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+// Lesser General Public License for more details.
+//
+//#define DEBUG 1
 
-#include <inttypes.h>
-#include "PN5180.h"
-#include "Debug.h" 
 #include <Arduino.h>
-
-
+#include "PN5180.h"
+#include "Debug.h"
 
 // PN5180 1-Byte Direct Commands
 // see 11.4.3.3 Host Interface Command List
@@ -25,11 +36,10 @@
 #define PN5180_RF_ON                    (0x16)
 #define PN5180_RF_OFF                   (0x17)
 
-PN5180::PN5180(uint8_t SSpin, uint8_t BUSYpin, uint8_t RSTpin, uint8_t IRQpin) {
+PN5180::PN5180(uint8_t SSpin, uint8_t BUSYpin, uint8_t RSTpin) {
   PN5180_NSS = SSpin;
   PN5180_BUSY = BUSYpin;
   PN5180_RST = RSTpin;
-  PN5180_IRQ = IRQpin;
 
   /*
    * 11.4.1 Physical Host Interface
@@ -44,7 +54,7 @@ PN5180::PN5180(uint8_t SSpin, uint8_t BUSYpin, uint8_t RSTpin, uint8_t IRQpin) {
 void PN5180::begin() {
   pinMode(PN5180_NSS, OUTPUT);
   pinMode(PN5180_BUSY, INPUT);
-  pinMode(PN5180_IRQ, INPUT);
+  pinMode(PN5180_RST, OUTPUT);
 
   digitalWrite(PN5180_NSS, HIGH); // disable
   SPI.begin();
@@ -84,7 +94,7 @@ bool PN5180::writeRegister(uint8_t reg, uint32_t value) {
   transceiveCommand(buf, 6);
   SPI.endTransaction();
 
-  return !isIRQ();
+  return true;
 }
 
 /*
@@ -114,7 +124,7 @@ bool PN5180::writeRegisterWithOrMask(uint8_t reg, uint32_t mask) {
   transceiveCommand(buf, 6);
   SPI.endTransaction();
 
-  return !isIRQ();
+  return true;
 }
 
 /*
@@ -144,7 +154,7 @@ bool PN5180::writeRegisterWithAndMask(uint8_t reg, uint32_t mask) {
   transceiveCommand(buf, 6);
   SPI.endTransaction();
 
-  return !isIRQ();
+  return true;
 }
 
 /*
@@ -169,7 +179,7 @@ bool PN5180::readRegister(uint8_t reg, uint32_t *value) {
   PN5180DEBUG(formatHex(*value));
   PN5180DEBUG("\n");
 
-  return !isIRQ();
+  return true;
 }
 
 /*
@@ -210,7 +220,7 @@ bool PN5180::readEEprom(uint8_t addr, uint8_t *buffer, uint8_t len) {
   PN5180DEBUG("\n");
 #endif
 
-  return !isIRQ();
+  return true;
 }
 
 /*
@@ -228,7 +238,7 @@ bool PN5180::readEEprom(uint8_t addr, uint8_t *buffer, uint8_t len) {
  * called during an ongoing RF transmission. Transceiver must be in ‘WaitTransmit’ state
  * with ‘Transceive’ command set. If the condition is not fulfilled, an exception is raised.
  */
-bool PN5180::sendData(uint8_t *data, uint8_t len, uint8_t validBits) {
+bool PN5180::sendData(uint8_t *data, uint8_t len) {
   if (len > 260) {
     PN5180DEBUG(F("ERROR: sendData with more than 260 bytes is not supported!\n"));
     return false;
@@ -237,17 +247,17 @@ bool PN5180::sendData(uint8_t *data, uint8_t len, uint8_t validBits) {
 #ifdef DEBUG
   PN5180DEBUG(F("Send data (len="));
   PN5180DEBUG(len);
-  PN5180DEBUG(F("): "));
+  PN5180DEBUG(F("):"));
   for (int i=0; i<len; i++) {
-    PN5180DEBUG(formatHex(data[i]));
     PN5180DEBUG(" ");
+    PN5180DEBUG(formatHex(data[i]));
   }
   PN5180DEBUG("\n");
 #endif
 
   uint8_t buffer[len+2];
   buffer[0] = PN5180_SEND_DATA;
-  buffer[1] = validBits; // number of bits of last byte to transmit
+  buffer[1] = 0; // all bits of last byte are transmitted
   for (uint8_t i=0; i<len; i++) {
     buffer[2+i] = data[i];
   }
@@ -274,7 +284,7 @@ bool PN5180::sendData(uint8_t *data, uint8_t len, uint8_t validBits) {
   transceiveCommand(buffer, len+2);
   SPI.endTransaction();
 
-  return !isIRQ();
+  return true;
 }
 
 /*
@@ -287,12 +297,12 @@ bool PN5180::sendData(uint8_t *data, uint8_t len, uint8_t validBits) {
  * preceding an RF data reception, no exception is raised but the data read back from the
  * reception buffer is invalid. If the condition is not fulfilled, an exception is raised.
  */
-bool PN5180::readData(uint8_t *buffer, uint16_t len) {
+uint8_t * PN5180::readData(uint16_t len) {
   if (len > 508) {
-    PN5180DEBUG("\nERROR: Reading more than 508 bytes is not supported!\n");
-    return false;
+    Serial.println(F("*** FATAL: Reading more than 508 bytes is not supported!"));
+    return 0L;
   }
-
+  
   PN5180DEBUG(F("Reading Data (len="));
   PN5180DEBUG(len);
   PN5180DEBUG(F(")...\n"));
@@ -300,19 +310,19 @@ bool PN5180::readData(uint8_t *buffer, uint16_t len) {
   uint8_t cmd[2] = { PN5180_READ_DATA, 0x00 };
 
   SPI.beginTransaction(PN5180_SPI_SETTINGS);
-  transceiveCommand(cmd, 2, buffer, len);
+  transceiveCommand(cmd, 2, readBuffer, len);
   SPI.endTransaction();
 
 #ifdef DEBUG
   PN5180DEBUG(F("Data read: "));
   for (int i=0; i<len; i++) {
-    PN5180DEBUG(formatHex(buffer[i]));
+    PN5180DEBUG(formatHex(readBuffer[i]));
     PN5180DEBUG(" ");
   }
   PN5180DEBUG("\n");
 #endif
 
-  return !isIRQ();
+  return readBuffer;
 }
 
 /*
@@ -346,7 +356,7 @@ bool PN5180::loadRFConfig(uint8_t txConf, uint8_t rxConf) {
   transceiveCommand(cmd, 3);
   SPI.endTransaction();
 
-  return !isIRQ();
+  return true;
 }
 
 /*
@@ -438,7 +448,7 @@ bool PN5180::transceiveCommand(uint8_t *sendBuffer, size_t sendBufferLen, uint8_
   // 0.
   while (LOW != digitalRead(PN5180_BUSY)); // wait until busy is low
   // 1.
-  digitalWrite(PN5180_NSS, LOW); delay(1);
+  digitalWrite(PN5180_NSS, LOW); delay(2);
   // 2.
   for (uint8_t i=0; i<sendBufferLen; i++) {
     SPI.transfer(sendBuffer[i]);
@@ -452,12 +462,11 @@ bool PN5180::transceiveCommand(uint8_t *sendBuffer, size_t sendBufferLen, uint8_
 
   // check, if write-only
   //
-  if ((0 == recvBuffer) || (0 == recvBufferLen)) return !isIRQ();
-
+  if ((0 == recvBuffer) || (0 == recvBufferLen)) return true;
   PN5180DEBUG(F("Receiving SPI frame...\n"));
 
   // 1.
-  digitalWrite(PN5180_NSS, LOW); delay(1);
+  digitalWrite(PN5180_NSS, LOW); delay(2);
   // 2.
   for (uint8_t i=0; i<recvBufferLen; i++) {
     recvBuffer[i] = SPI.transfer(0xff);
@@ -478,7 +487,7 @@ bool PN5180::transceiveCommand(uint8_t *sendBuffer, size_t sendBufferLen, uint8_
   PN5180DEBUG("'\n");
 #endif
 
-  return !isIRQ();
+  return true;
 }
 
 /*
@@ -489,21 +498,10 @@ void PN5180::reset() {
   delay(10);
   digitalWrite(PN5180_RST, HIGH); // 2ms to ramp up required
   delay(10);
-
+  
   while (0 == (IDLE_IRQ_STAT & getIRQStatus())); // wait for system to start up
+  
   clearIRQStatus(0xffffffff); // clear all flags
-}
-
-/*
- * Check signaled interrupt on IRQ pin
- */
-bool PN5180::isIRQ() {
-  if (0 == PN5180_IRQ) return false;  // state unknown, no IRQ pin
-
-  if (HIGH == digitalRead(PN5180_IRQ)) {
-    return true;
-  }
-  else return false; // no IRQ
 }
 
 /**
@@ -534,11 +532,18 @@ bool PN5180::clearIRQStatus(uint32_t irqMask) {
 /*
  * Get TRANSCEIVE_STATE from RF_STATUS register
  */
+#ifdef DEBUG 
+extern void showIRQStatus();
+#endif
+
 PN5180TransceiveStat PN5180::getTransceiveState() {
   PN5180DEBUG(F("Get Transceive state...\n"));
 
   uint32_t rfStatus;
   if (!readRegister(RF_STATUS, &rfStatus)) {
+#ifdef DEBUG    
+    showIRQStatus();
+#endif    
     PN5180DEBUG(F("ERROR reading RF_STATUS register.\n"));
     return PN5180TransceiveStat(0);
   }

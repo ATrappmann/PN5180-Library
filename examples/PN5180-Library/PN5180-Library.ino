@@ -1,15 +1,33 @@
+// NAME: PN5180-Library.ino
 //
-// PN5180-NFC Module from NXP Semiconductors
+// DESC: Example usage of the PN5180 library for the PN5180-NFC Module
+//       from NXP Semiconductors.
+//
+// Copyright (c) 2018 by Andreas Trappmann. All rights reserved.
+//
+// This file is part of the PN5180 library for the Arduino environment.
+//
+// This library is free software; you can redistribute it and/or
+// modify it under the terms of the GNU Lesser General Public
+// License as published by the Free Software Foundation; either
+// version 2.1 of the License, or (at your option) any later version.
+//
+// This library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+// Lesser General Public License for more details.
 //
 // BEWARE: SPI with PN5180 module has to be at a level of 3.3V
-// use of logic-level converters from 5V->3.3V is absolutly neccessary on all input pins of PN5180!
-// 
-// Arduino <-> Level Converter <-> PN5180
+// use of logic-level converters from 5V->3.3V is absolutly neccessary
+// on most Arduinos for all input pins of PN5180!
+//
+// Arduino <-> Level Converter <-> PN5180 pin mapping:
+//
 // 5V             <-->             5V
 // 3,3V           <-->             3,3V
 // GND            <-->             GND
 
-// 5V      <-> HV              
+// 5V      <-> HV
 // GND     <-> GND (HV)
 //             LV              <-> 3.3V
 //             GND (LV)        <-> GND
@@ -20,16 +38,24 @@
 // MOSI,11 <-> HV3 - LV3       --> MOSI
 // SS,10   <-> HV4 - LV4       --> NSS (=Not SS -> active LOW)
 // BUSY,9         <---             BUSY
-// IRQ,8          <---             IRQ
 // Reset,7 <-> HV2 - LV2       --> RST
-// 
+//
+// ESP-32 <-> PN5180 pin mapping:
+//
+// SCLK, 18                     --> SCLK
+// MISO, 19                     <-- MISO
+// MOSI, 23                     --> MOSI
+// SS, 16                       --> NSS (=Not SS -> active LOW)
+// BUSY, 5                      <-- BUSY
+// Reset, 17                    --> RST
+//
 
 /*
  * Pins on ICODE2 Reader Writer:
- * 
- *   ICODE2   |    PN5180
- * pin  label |pin  I/O name
- * 1    +5V     
+ *
+ *   ICODE2   |     PN5180
+ * pin  label | pin  I/O  name
+ * 1    +5V
  * 2    +3,3V
  * 3    RST     10   I    RESET_N (low active)
  * 4    NSS     1    I    SPI NSS
@@ -42,19 +68,10 @@
  * 11   IRQ     39   O    IRQ
  * 12   AUX     40   O    AUX1 - Analog/Digital test signal
  * 13   REQ     2?  I/O   AUX2 - Analog test bus or download
- * 
+ *
  */
- 
-// ESP-32 <-> PN5180 pin mapping: 
-//
-// SCLK, 18                     --> SCLK
-// MISO, 19                     <-- MISO
-// MOSI, 23                     --> MOSI
-// SS, 16                       --> NSS (=Not SS -> active LOW)
-// BUSY, 5                      <-- BUSY
-// IRQ, not used
-// Reset, 17                    --> RST
-// 
+
+//#define WRITE_ENABLED 1
 
 #include <PN5180.h>
 #include <PN5180ISO15693.h>
@@ -62,27 +79,19 @@
 // Arduino UNO
 #define PN5180_NSS  10
 #define PN5180_BUSY 9
-#define PN5180_IRQ  8
 #define PN5180_RST  7
 
 /*
-  // ESP-32 
+  // ESP-32
   #define PN5180_NSS  16
   #define PN5180_BUSY 5
-  #define PN5180_IRQ  -1
   #define PN5180_RST  17
-*/ 
+*/
 
-// Onboard LED
-#define RF_LED LED_BUILTIN
 
-PN5180 nfc(PN5180_NSS, PN5180_BUSY, PN5180_RST, PN5180_IRQ);
-PN5180ISO15693 isoNfc(&nfc);
+PN5180ISO15693 nfc(PN5180_NSS, PN5180_BUSY, PN5180_RST);
 
 void setup() {
-  pinMode(RF_LED, OUTPUT);
-  pinMode(PN5180_RST, OUTPUT);
-
   Serial.begin(115200);
   Serial.println(F("=================================="));
   Serial.println(F("Uploaded: " __DATE__ " " __TIME__));
@@ -92,15 +101,6 @@ void setup() {
   Serial.println(F("----------------------------------"));
   Serial.println(F("PN5180 Hard-Reset..."));
   nfc.reset();
-  if (nfc.isIRQ()) {
-    showIRQStatus();
-    nfc.end();
-    Serial.println(F("ERROR: Card not responding!?"));
-    Serial.println(F("Done. -- Press RESET to continue..."));
-    Serial.flush();
-    Serial.end();
-    exit(0);
-  }
   
   Serial.println(F("----------------------------------"));
   Serial.println(F("Reading product version..."));
@@ -155,8 +155,7 @@ void setup() {
 
   Serial.println(F("----------------------------------"));
   Serial.println(F("Enable RF field..."));
-  isoNfc.setupRF();
-  digitalWrite(RF_LED, HIGH);
+  nfc.setupRF();
 }
 
 uint32_t loopCnt = 0;
@@ -166,81 +165,97 @@ void loop() {
   Serial.print(F("Loop #"));
   Serial.println(loopCnt++);
 
-  Serial.print(F("Check IRQ signal: "));
-  Serial.println((nfc.isIRQ()?"HIGH":"LOW"));
-  if (!nfc.isIRQ()) {
-    uint8_t uid[8];
-    bool rc = isoNfc.getInventory(uid);
-    uint32_t irqStatus = nfc.getIRQStatus();
-    if (0 == irqStatus) {
-      Serial.print(F("Inventory successful, uid="));
-      for (int i=0; i<8; i++) {
-        Serial.print(uid[7-i], HEX); // LSB is first
-        if (i < 2) Serial.print(":");
-      }
-      Serial.println();
-  
-      uint8_t blockSize, numBlocks;
-      if (isoNfc.getSystemInfo(uid, &blockSize, &numBlocks)) {
-        Serial.print(F("System Info retrieved: blockSize="));
-        Serial.print(blockSize);
-        Serial.print(F(", numBlocks="));
-        Serial.println(numBlocks);
-  
-        uint8_t readBuffer[blockSize];
-        for (int no=0; no<numBlocks; no++) {
-          if (isoNfc.readSingleBlock(uid, no, readBuffer, blockSize)) {
-            Serial.print(F("Read block #"));
-            Serial.print(no);
-            Serial.print(": ");
-            for (int i=0; i<blockSize; i++) {
-              if (readBuffer[i] < 16) Serial.print("0");
-              Serial.print(readBuffer[i], HEX);
-              Serial.print(" ");
-            }
-            Serial.print(" ");
-            for (int i=0; i<blockSize; i++) {
-              if (isprint(readBuffer[i])) {
-                Serial.print((char)readBuffer[i]);
-              }
-              else Serial.print(".");
-            }
-            Serial.println();          
-          }
-          else {
-            Serial.println(F("Error in readSingleBlock!"));
-            showIRQStatus();
-            nfc.clearIRQStatus(0xffffffff);
-            break;
-          }
-        }  
-      }
-      else {
-        Serial.println(F("Error in getSystemInfo!"));
-        showIRQStatus();
-        nfc.clearIRQStatus(0xffffffff);
-      }
+  uint8_t uid[8];
+  ISO15693ErrorCode rc = nfc.getInventory(uid);
+  if (ISO15693_EC_OK != rc) {
+    Serial.print(F("Error in getInventory: code="));
+    Serial.println(rc, HEX);
+    goto error;
+  }
+  Serial.print(F("Inventory successful, UID="));
+  for (int i=0; i<8; i++) {
+    Serial.print(uid[7-i], HEX); // LSB is first
+    if (i < 2) Serial.print(":");
+  }
+  Serial.println();
+
+  Serial.println(F("----------------------------------"));
+  uint8_t blockSize, numBlocks;
+  rc = nfc.getSystemInfo(uid, &blockSize, &numBlocks);
+  if (ISO15693_EC_OK != rc) {
+    Serial.print(F("Error in getSystemInfo: code="));
+    Serial.println(rc, HEX);
+    goto error;
+  }
+  Serial.print(F("System Info retrieved: blockSize="));
+  Serial.print(blockSize);
+  Serial.print(F(", numBlocks="));
+  Serial.println(numBlocks);
+
+  Serial.println(F("----------------------------------"));
+  uint8_t readBuffer[blockSize];
+  for (int no=0; no<numBlocks; no++) {
+    rc = nfc.readSingleBlock(uid, no, readBuffer, blockSize);
+    if (ISO15693_EC_OK != rc) {
+      Serial.print(F("Error in readSingleBlock #"));
+      Serial.print(no);
+      Serial.print(F(", code="));
+      Serial.println(rc, HEX);
+      goto error;
     }
-    else if (0 == (RX_SOF_DET_IRQ_STAT & irqStatus)) { // no card detected
-      Serial.println(F("No card!"));
-      nfc.clearIRQStatus(RX_SOF_DET_IRQ_STAT | TX_IRQ_STAT | IDLE_IRQ_STAT);
-      delay(2000);
+    Serial.print(F("Read block #"));
+    Serial.print(no);
+    Serial.print(": ");
+    for (int i=0; i<blockSize; i++) {
+      if (readBuffer[i] < 16) Serial.print("0");
+      Serial.print(readBuffer[i], HEX);
+      Serial.print(" ");
+    }
+    Serial.print(" ");
+    for (int i=0; i<blockSize; i++) {
+      if (isprint(readBuffer[i])) {
+        Serial.print((char)readBuffer[i]);
+      }
+      else Serial.print(".");
+    }
+    Serial.println();
+  }
+
+#ifdef WRITE_ENABLED         
+  Serial.println(F("----------------------------------"));
+  uint8_t *writeBuffer = malloc(blockSize);
+  for (int i=0; i<blockSize; i++) {
+    writeBuffer[i] = 0x80 + i;
+  }
+  for (int no=0; no<numBlocks; no++) {
+    rc = nfc.writeSingleBlock(uid, no, writeBuffer, blockSize);
+    if (ISO15693_EC_OK == rc) {
+      Serial.print(F("Wrote block #"));
+      Serial.println(no);
+      break;
     }
     else {
-      Serial.println(F("Error in getInventory!"));
-      showIRQStatus();
-      nfc.reset();
-      isoNfc.setupRF();
-      delay(2000);
+      Serial.print(F("Error in writeSingleBlock #"));
+      Serial.print(no);
+      Serial.print(F(", code="));
+      Serial.println(rc, HEX);
+      nfc.clearIRQStatus(0xffffffff);
+      break;
     }
   }
-  else {
-      showIRQStatus();
-      nfc.reset();
-      isoNfc.setupRF();
-      delay(2000);
-  }
+#endif /* WRITE_ENABLED */        
+  goto done;
   
+error:
+  uint32_t irqStatus = nfc.getIRQStatus();
+  if (0 == (RX_SOF_DET_IRQ_STAT & irqStatus)) { // no card detected
+    Serial.println(F("*** No card detected!"));
+  }
+  showIRQStatus();
+  nfc.reset();
+  nfc.setupRF();
+
+done:  
   delay(1000);
 }
 

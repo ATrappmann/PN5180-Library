@@ -2,80 +2,116 @@
 //
 // DESC: ISO15693 protocol on NXP Semiconductors PN5180 module for Arduino.
 //
+// Copyright (c) 2018 by Andreas Trappmann. All rights reserved.
+//
+// This file is part of the PN5180 library for the Arduino environment.
+//
+// This library is free software; you can redistribute it and/or
+// modify it under the terms of the GNU Lesser General Public
+// License as published by the Free Software Foundation; either
+// version 2.1 of the License, or (at your option) any later version.
+//
+// This library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+// Lesser General Public License for more details.
+//
 //#define DEBUG 1
 
-#include <inttypes.h>
+#include <Arduino.h>
 #include "PN5180ISO15693.h"
 #include "Debug.h"
-#include <Arduino.h>
 
-PN5180ISO15693::PN5180ISO15693(PN5180 *nfc) {
-  this->nfc = nfc;
+PN5180ISO15693::PN5180ISO15693(uint8_t SSpin, uint8_t BUSYpin, uint8_t RSTpin) 
+              : PN5180(SSpin, BUSYpin, RSTpin) {
 }
 
-/*  
+/*
  * Inventory, code=01
- * 
- * Request format: SOF, Flags, Inventory, Opt.AFI, Mask len, Mask value, CRC16, EOF
- * Response format: SOF, Flags, DSFID, UID, CRC16, EOF
- * 
+ *
+ * Request format: SOF, Req.Flags, Inventory, AFI (opt.), Mask len, Mask value, CRC16, EOF
+ * Response format: SOF, Resp.Flags, DSFID, UID, CRC16, EOF
+ *
  */
-bool PN5180ISO15693::getInventory(uint8_t *uid) {  
+ISO15693ErrorCode PN5180ISO15693::getInventory(uint8_t *uid) {
   //                     Flags,  CMD, maskLen
   uint8_t inventory[] = { 0x26, 0x01, 0x00 };
   //                        |\- inventory flag + high data rate
   //                        \-- 1 slot: only one card, no AFI field present
   PN5180DEBUG(F("Get Inventory...\n"));
 
-  uint8_t *readBuffer;
-  if (!issueISO15693Command(inventory, sizeof(inventory), &readBuffer)) {
-    PN5180DEBUG("no answer\n");
-    return false;
-  }
-
-  uint32_t irqStatus = nfc->getIRQStatus();
-  if (0 == (RX_SOF_DET_IRQ_STAT & irqStatus)) { // no card detected
-     nfc->clearIRQStatus(TX_IRQ_STAT | IDLE_IRQ_STAT);
-     return false;
+  for (int i=0; i<8; i++) {
+    uid[i] = 0;  
   }
   
+  uint8_t *readBuffer;
+  ISO15693ErrorCode rc = issueISO15693Command(inventory, sizeof(inventory), &readBuffer);
+  if (ISO15693_EC_OK != rc) {
+    return rc;
+  }
+
   PN5180DEBUG(F("Response flags: "));
   PN5180DEBUG(formatHex(readBuffer[0]));
   PN5180DEBUG(F(", Data Storage Format ID: "));
   PN5180DEBUG(formatHex(readBuffer[1]));
   PN5180DEBUG(F(", UID: "));
+  
   for (int i=0; i<8; i++) {
-    uid[i] = readBuffer[2+i]; 
+    uid[i] = readBuffer[2+i];
+#ifdef DEBUG
     PN5180DEBUG(formatHex(uid[7-i])); // LSB comes first
     if (i<2) PN5180DEBUG(":");
+#endif
   }
+  
   PN5180DEBUG("\n");
 
-  free(readBuffer);
-  nfc->clearIRQStatus(RX_SOF_DET_IRQ_STAT | IDLE_IRQ_STAT | TX_IRQ_STAT | RX_IRQ_STAT);
-  return !nfc->isIRQ();
+  return ISO15693_EC_OK;
 }
 
 /*
  * Read single block, code=20
- * 
- * Request format: SOF, Flags, ReadSingleBlock, UID, BlockNumber, CRC16, EOF
- * Response format: SOF, Flags, BlockSecurityStatus, Data, CRC16, EOF
+ *
+ * Request format: SOF, Req.Flags, ReadSingleBlock, UID (opt.), BlockNumber, CRC16, EOF
+ * Response format:
+ *  when ERROR flag is set:
+ *    SOF, Resp.Flags, ErrorCode, CRC16, EOF
+ *
+ *     Response Flags:
+  *    xxxx.3xx0
+  *         |||\_ Error flag: 0=no error, 1=error detected, see error field
+  *         \____ Extension flag: 0=no extension, 1=protocol format is extended
+  *
+  *  If Error flag is set, the following error codes are defined:
+  *    01 = The command is not supported, i.e. the request code is not recognized.
+  *    02 = The command is not recognized, i.e. a format error occured.
+  *    03 = The option is not suppored.
+  *    0F = Unknown error.
+  *    10 = The specific block is not available.
+  *    11 = The specific block is already locked and cannot be locked again.
+  *    12 = The specific block is locked and cannot be changed.
+  *    13 = The specific block was not successfully programmed.
+  *    14 = The specific block was not successfully locked.
+  *    A0-DF = Custom command error codes
+ *
+ *  when ERROR flag is NOT set:
+ *    SOF, Flags, BlockData (len=blockLength), CRC16, EOF
  */
-bool PN5180ISO15693::readSingleBlock(uint8_t *uid, uint8_t blockNo, uint8_t *readBuffer, uint8_t blockSize) {
-  //                              flags, cmd, uid,             blockNo  
+ISO15693ErrorCode PN5180ISO15693::readSingleBlock(uint8_t *uid, uint8_t blockNo, uint8_t *blockData, uint8_t blockSize) {
+  //                            flags, cmd, uid,             blockNo
   uint8_t readSingleBlock[] = { 0x62, 0x20, 1,2,3,4,5,6,7,8, blockNo }; // UID has LSB first!
   //                              |\- high data rate
   //                              \-- options, addressed by UID
   for (int i=0; i<8; i++) {
     readSingleBlock[2+i] = uid[i];
   }
+
+#ifdef DEBUG
   PN5180DEBUG("Read Single Block #");
-  PN5180DEBUG(blockNo); 
+  PN5180DEBUG(blockNo);
   PN5180DEBUG(", size=");
   PN5180DEBUG(blockSize);
   PN5180DEBUG(": ");
-#ifdef DEBUG  
   for (int i=0; i<sizeof(readSingleBlock); i++) {
     PN5180DEBUG(" ");
     PN5180DEBUG(formatHex(readSingleBlock[i]));
@@ -84,117 +120,237 @@ bool PN5180ISO15693::readSingleBlock(uint8_t *uid, uint8_t blockNo, uint8_t *rea
 #endif
 
   uint8_t *resultPtr;
-  if (!issueISO15693Command(readSingleBlock, sizeof(readSingleBlock), &resultPtr)) {
-    return false;
+  ISO15693ErrorCode rc = issueISO15693Command(readSingleBlock, sizeof(readSingleBlock), &resultPtr);
+  if (ISO15693_EC_OK != rc) {
+    return rc;
   }
 
-  uint32_t irqStatus = nfc->getIRQStatus();
-  if (0 == (RX_SOF_DET_IRQ_STAT & irqStatus)) { // no card detected
-     nfc->clearIRQStatus(TX_IRQ_STAT | IDLE_IRQ_STAT);
-     return false;
-  }
-
-  uint8_t flags = readBuffer[0];
-  if (flags & 0x01) { // check error flag
-    PN5180DEBUG(F("ERROR_FLAG is set!"));
-  }
-  uint8_t secStatus = readBuffer[1];  // wirklich??
   PN5180DEBUG("Value=");
+  
   for (int i=0; i<blockSize; i++) {
-    readBuffer[i] = resultPtr[2+i];
-    PN5180DEBUG(formatHex(readBuffer[i]));
-    PN5180DEBUG(" ");
-  }
-  PN5180DEBUG(" ");
-  for (int i=0; i<blockSize; i++) {  
-    char c = readBuffer[i];
+    blockData[i] = resultPtr[2+i];
 #ifdef DEBUG    
+    PN5180DEBUG(formatHex(blockData[i]));
+    PN5180DEBUG(" ");
+#endif    
+  }
+
+#ifdef DEBUG
+  PN5180DEBUG(" ");
+  for (int i=0; i<blockSize; i++) {
+    char c = blockData[i];
     if (isPrintable(c)) {
       PN5180DEBUG(c);
     }
     else PN5180DEBUG(".");
-#endif
   }
   PN5180DEBUG("\n");
+#endif
 
-  free(resultPtr);
-  nfc->clearIRQStatus(RX_SOF_DET_IRQ_STAT | IDLE_IRQ_STAT | TX_IRQ_STAT | RX_IRQ_STAT);
-  return !nfc->isIRQ();
+  return ISO15693_EC_OK;
+}
+
+/*
+ * Write single block, code=21
+ *
+ * Request format: SOF, Requ.Flags, WriteSingleBlock, UID (opt.), BlockNumber, BlockData (len=blcokLength), CRC16, EOF
+ * Response format:
+ *  when ERROR flag is set:
+ *    SOF, Resp.Flags, ErrorCode, CRC16, EOF
+ *
+ *     Response Flags:
+  *    xxxx.3xx0
+  *         |||\_ Error flag: 0=no error, 1=error detected, see error field
+  *         \____ Extension flag: 0=no extension, 1=protocol format is extended
+  *
+  *  If Error flag is set, the following error codes are defined:
+  *    01 = The command is not supported, i.e. the request code is not recognized.
+  *    02 = The command is not recognized, i.e. a format error occured.
+  *    03 = The option is not suppored.
+  *    0F = Unknown error.
+  *    10 = The specific block is not available.
+  *    11 = The specific block is already locked and cannot be locked again.
+  *    12 = The specific block is locked and cannot be changed.
+  *    13 = The specific block was not successfully programmed.
+  *    14 = The specific block was not successfully locked.
+  *    A0-DF = Custom command error codes
+ *
+ *  when ERROR flag is NOT set:
+ *    SOF, Resp.Flags, CRC16, EOF
+ */
+ISO15693ErrorCode PN5180ISO15693::writeSingleBlock(uint8_t *uid, uint8_t blockNo, uint8_t *blockData, uint8_t blockSize) {
+  //                            flags, cmd, uid,             blockNo
+  uint8_t writeSingleBlock[] = { 0x62, 0x21, 1,2,3,4,5,6,7,8, blockNo }; // UID has LSB first!
+  //                               |\- high data rate
+  //                               \-- options, addressed by UID
+
+  uint8_t writeCmdSize = sizeof(writeSingleBlock) + blockSize;
+  uint8_t *writeCmd = malloc(writeCmdSize);
+  uint8_t pos = 0;
+  writeCmd[pos++] = writeSingleBlock[0];
+  writeCmd[pos++] = writeSingleBlock[1];
+  for (int i=0; i<8; i++) {
+    writeCmd[pos++] = uid[i];
+  }
+  writeCmd[pos++] = blockNo;
+  for (int i=0; i<blockSize; i++) {
+    writeCmd[pos++] = blockData[i];
+  }
+
+#ifdef DEBUG
+  PN5180DEBUG("Write Single Block #");
+  PN5180DEBUG(blockNo);
+  PN5180DEBUG(", size=");
+  PN5180DEBUG(blockSize);
+  PN5180DEBUG(":");
+  for (int i=0; i<writeCmdSize; i++) {
+    PN5180DEBUG(" ");
+    PN5180DEBUG(formatHex(writeCmd[i]));
+  }
+  PN5180DEBUG("\n");
+#endif
+
+  uint8_t *resultPtr;
+  ISO15693ErrorCode rc = issueISO15693Command(writeCmd, writeCmdSize, &resultPtr);
+  if (ISO15693_EC_OK != rc) {
+    free(writeCmd);
+    return rc;
+  }
+
+  free(writeCmd);
+  return ISO15693_EC_OK;
 }
 
 /*
  * Get System Information, code=2B
- * 
- * Request format: SOF, Flags, GetSysInfo, Opt.UID, CRC16, EOF
- * Response format: 
- *  when NO error: SOF, Flags, InfoFlags, UID, DSFID, AFI, Other fields, CRC16, EOF
- *  when error flag is set: SOF, Flags, Error code, CRC16, EOF
- * 
+ *
+ * Request format: SOF, Req.Flags, GetSysInfo, UID (opt.), CRC16, EOF
+ * Response format:
+ *  when ERROR flag is set:
+ *    SOF, Resp.Flags, ErrorCode, CRC16, EOF
+ *
+ *     Response Flags:
+  *    xxxx.3xx0
+  *         |||\_ Error flag: 0=no error, 1=error detected, see error field
+  *         \____ Extension flag: 0=no extension, 1=protocol format is extended
+  *
+  *  If Error flag is set, the following error codes are defined:
+  *    01 = The command is not supported, i.e. the request code is not recognized.
+  *    02 = The command is not recognized, i.e. a format error occured.
+  *    03 = The option is not suppored.
+  *    0F = Unknown error.
+  *    10 = The specific block is not available.
+  *    11 = The specific block is already locked and cannot be locked again.
+  *    12 = The specific block is locked and cannot be changed.
+  *    13 = The specific block was not successfully programmed.
+  *    14 = The specific block was not successfully locked.
+  *    A0-DF = Custom command error codes
+  *
+ *  when ERROR flag is NOT set:
+ *    SOF, Flags, InfoFlags, UID, DSFID (opt.), AFI (opt.), Other fields (opt.), CRC16, EOF
+ *
+ *    InfoFlags:
+ *    xxxx.3210
+ *         |||\_ DSFID: 0=DSFID not supported, DSFID field NOT present; 1=DSFID supported, DSFID field present
+ *         ||\__ AFI: 0=AFI not supported, AFI field not present; 1=AFI supported, AFI field present
+ *         |\___ VICC memory size:
+ *         |        0=Information on VICC memory size is not supported. Memory size field is present. ???
+ *         |        1=Information on VICC memory size is supported. Memory size field is present.
+ *         \____ IC reference:
+ *                  0=Information on IC reference is not supported. IC reference field is not present.
+ *                  1=Information on IC reference is supported. IC reference field is not present.
+ *
+ *    VICC memory size:
+ *      xxxb.bbbb nnnn.nnnn
+ *        bbbbb - Block size is expressed in number of bytes, on 5 bits, allowing to specify up to 32 bytes i.e. 256 bits.
+ *        nnnn.nnnn - Number of blocks is on 8 bits, allowing to specify up to 256 blocks.
+ *
+ *    IC reference: The IC reference is on 8 bits and its meaning is defined by the IC manufacturer.
  */
-bool PN5180ISO15693::getSystemInfo(uint8_t *uid, uint8_t *blockSize, uint8_t *numBlocks) {
+ISO15693ErrorCode PN5180ISO15693::getSystemInfo(uint8_t *uid, uint8_t *blockSize, uint8_t *numBlocks) {
   uint8_t sysInfo[] = { 0x22, 0x2b, 1,2,3,4,5,6,7,8 };  // UID has LSB first!
   for (int i=0; i<8; i++) {
     sysInfo[2+i] = uid[i];
   }
-  PN5180DEBUG("Get System Information"); 
+
 #ifdef DEBUG
+  PN5180DEBUG("Get System Information");
   for (int i=0; i<sizeof(sysInfo); i++) {
     PN5180DEBUG(" ");
     PN5180DEBUG(formatHex(sysInfo[i]));
   }
-#endif
   PN5180DEBUG("\n");
+#endif
 
   uint8_t *readBuffer;
-  if (!issueISO15693Command(sysInfo, sizeof(sysInfo), &readBuffer)) {
-    return false;
-  }
-
-  uint32_t irqStatus = nfc->getIRQStatus();
-  if (0 == (RX_SOF_DET_IRQ_STAT & irqStatus)) { // no card detected
-     nfc->clearIRQStatus(TX_IRQ_STAT | IDLE_IRQ_STAT);
-     return false;
+  ISO15693ErrorCode rc = issueISO15693Command(sysInfo, sizeof(sysInfo), &readBuffer);
+  if (ISO15693_EC_OK != rc) {
+    return rc;
   }
 
   for (int i=0; i<8; i++) {
     uid[i] = readBuffer[2+i];
-  }  
+  }
+  
 #ifdef DEBUG
   PN5180DEBUG("UID=");
   for (int i=0; i<8; i++) {
     PN5180DEBUG(formatHex(readBuffer[9-i]));  // UID has LSB first!
-    if (i<7) PN5180DEBUG(":");
+    if (i<2) PN5180DEBUG(":");
   }
   PN5180DEBUG("\n");
 #endif
-  uint8_t *p = &readBuffer[10];
   
+  uint8_t *p = &readBuffer[10];
+
   uint8_t infoFlags = readBuffer[1];
   if (infoFlags & 0x01) { // DSFID flag
     uint8_t dsfid = *p++;
-    PN5180DEBUG("DSDID=");  // Data storage format identifier
+    PN5180DEBUG("DSFID=");  // Data storage format identifier
     PN5180DEBUG(formatHex(dsfid));
     PN5180DEBUG("\n");
   }
+#ifdef DEBUG
+  else PN5180DEBUG(F("No DSFID\n"));  
+#endif
+  
   if (infoFlags & 0x02) { // AFI flag
     uint8_t afi = *p++;
-    PN5180DEBUG("AFI=");  // Application family identifier
+    PN5180DEBUG(F("AFI="));  // Application family identifier
     PN5180DEBUG(formatHex(afi));
+    PN5180DEBUG(F(" - "));
+    switch (afi >> 4) {
+      case 0: PN5180DEBUG(F("All families")); break;
+      case 1: PN5180DEBUG(F("Transport")); break;
+      case 2: PN5180DEBUG(F("Financial")); break;
+      case 3: PN5180DEBUG(F("Identification")); break;
+      case 4: PN5180DEBUG(F("Telecommunication")); break;
+      case 5: PN5180DEBUG(F("Medical")); break;
+      case 6: PN5180DEBUG(F("Multimedia")); break;
+      case 7: PN5180DEBUG(F("Gaming")); break;
+      case 8: PN5180DEBUG(F("Data storage")); break;
+      case 9: PN5180DEBUG(F("Item management")); break;
+      case 10: PN5180DEBUG(F("Express parcels")); break;
+      case 11: PN5180DEBUG(F("Postal services")); break;
+      case 12: PN5180DEBUG(F("Airline bags")); break;
+      default: PN5180DEBUG(F("Unknown")); break;
+    }
     PN5180DEBUG("\n");
   }
+#ifdef DEBUG
+  else PN5180DEBUG(F("No AFI\n"));
+#endif
+
   if (infoFlags & 0x04) { // VICC Memory size
     *numBlocks = *p++;
-    *blockSize = *p++; 
+    *blockSize = *p++;
     *blockSize = (*blockSize) & 0x1f;
-    
-    //uint16_t viccMemSize = (*blockSize << 8) | (*numBlocks << 0);
-    *blockSize = *blockSize + 1;
-    // neu:
-    *numBlocks = *numBlocks + 1;
+
+    *blockSize = *blockSize + 1; // range: 1-32
+    *numBlocks = *numBlocks + 1; // range: 1-256
     uint16_t viccMemSize = (*blockSize) * (*numBlocks);
-    
+
     PN5180DEBUG("VICC MemSize=");
-    //PN5180DEBUG(formatHex(viccMemSize));
     PN5180DEBUG(viccMemSize);
     PN5180DEBUG(" BlockSize=");
     PN5180DEBUG(*blockSize);
@@ -202,55 +358,60 @@ bool PN5180ISO15693::getSystemInfo(uint8_t *uid, uint8_t *blockSize, uint8_t *nu
     PN5180DEBUG(*numBlocks);
     PN5180DEBUG("\n");
   }
+#ifdef DEBUG
+  else PN5180DEBUG(F("No VICC memory size\n"));
+#endif
+   
   if (infoFlags & 0x08) { // IC reference
     uint8_t icRef = *p++;
     PN5180DEBUG("IC Ref=");
     PN5180DEBUG(formatHex(icRef));
     PN5180DEBUG("\n");
   }
- 
-  free(readBuffer);
-  nfc->clearIRQStatus(RX_SOF_DET_IRQ_STAT | IDLE_IRQ_STAT | TX_IRQ_STAT | RX_IRQ_STAT);
-  return !nfc->isIRQ();
+#ifdef DEBUG
+  else PN5180DEBUG(F("No IC ref\n"));
+#endif
+
+  return ISO15693_EC_OK;
 }
 
-/* 
+/*
  * ISO 15693 - Protocol
- * 
+ *
  * General Request Format:
  *  SOF, Req.Flags, Command code, Parameters, Data, CRC16, EOF
- * 
+ *
  *  Request Flags:
  *    xxxx.3210
  *         |||\_ Subcarrier flag: 0=single sub-carrier, 1=two sub-carrier
- *         ||\__ Datarate flag: 0=low data rate, 1=high data rate 
+ *         ||\__ Datarate flag: 0=low data rate, 1=high data rate
  *         |\___ Inventory flag: 0=no inventory, 1=inventory
  *         \____ Protocol extension flag: 0=no extension, 1=protocol format is extended
- *         
+ *
  *  If Inventory flag is set:
  *    7654.xxxx
  *     ||\_ AFI flag: 0=no AFI field present, 1=AFI field is present
  *     |\__ Number of slots flag: 0=16 slots, 1=1 slot
  *     \___ Option flag: 0=default, 1=meaning is defined by command description
- *     
+ *
  *  If Inventory flag is NOT set:
  *    7654.xxxx
  *     ||\_ Select flag: 0=request shall be executed by any VICC according to Address_flag
- *     ||                1=request shall be executed only by VICC in selected state 
- *     |\__ Address flag: 0=request is not addressed. UID field is not present. 
+ *     ||                1=request shall be executed only by VICC in selected state
+ *     |\__ Address flag: 0=request is not addressed. UID field is not present.
  *     |                  1=request is addressed. UID field is present. Only VICC with UID shall answer
  *     \___ Option flag: 0=default, 1=meaning is defined by command description
- *     
- * General Response Format:    
+ *
+ * General Response Format:
  *  SOF, Resp.Flags, Parameters, Data, CRC16, EOF
- *    
+ *
  *  Response Flags:
- *    xxxx.3210  
+ *    xxxx.3210
  *         |||\_ Error flag: 0=no error, 1=error detected, see error field
  *         ||\__ RFU: 0
  *         |\___ RFU: 0
  *         \____ Extension flag: 0=no extension, 1=protocol format is extended
- *         
+ *
  *  If Error flag is set, the following error codes are defined:
  *    01 = The command is not supported, i.e. the request code is not recognized.
  *    02 = The command is not recognized, i.e. a format error occured.
@@ -262,57 +423,68 @@ bool PN5180ISO15693::getSystemInfo(uint8_t *uid, uint8_t *blockSize, uint8_t *nu
  *    13 = The specific block was not successfully programmed.
  *    14 = The specific block was not successfully locked.
  *    A0-DF = Custom command error codes
- */ 
-bool PN5180ISO15693::issueISO15693Command(uint8_t *cmd, uint8_t cmdLen, uint8_t **resultPtr) {
-#ifdef DEBUG  
+ *
+ *  Function return values:
+ *    0 = OK
+ *   -1 = No card detected
+ *   >0 = Error code
+ */
+ISO15693ErrorCode PN5180ISO15693::issueISO15693Command(uint8_t *cmd, uint8_t cmdLen, uint8_t **resultPtr) {
+#ifdef DEBUG
   PN5180DEBUG(F("Issue Command 0x"));
   PN5180DEBUG(formatHex(cmd[1]));
   PN5180DEBUG("...\n");
 #endif
 
-  nfc->sendData(cmd, cmdLen);
-  delay(10);  
-  
-//  while (!isIRQ()); // wait for RX_IRQ to raise
-  uint32_t irqStatus = nfc->getIRQStatus();
-#ifdef DEBUG
-  PN5180DEBUG(F("IRQ-Status="));
-  PN5180DEBUG(formatHex(irqStatus));
-  PN5180DEBUG("\n");
-  if (0 == (irqStatus & (1<<0))) { // RX_IRQ_STAT
-      PN5180DEBUG(F("** ERROR: Not END_of_RF_Reception_IRQ!\n"));
+  sendData(cmd, cmdLen);
+  delay(10);
+
+  if (0 == (getIRQStatus() & RX_SOF_DET_IRQ_STAT)) {
+    return EC_NO_CARD;
   }
-#endif
   
   uint32_t rxStatus;
-  nfc->readRegister(RX_STATUS, &rxStatus);
+  readRegister(RX_STATUS, &rxStatus);
+  
   PN5180DEBUG(F("RX-Status="));
   PN5180DEBUG(formatHex(rxStatus));
- 
-  uint16_t len = (uint16_t)(rxStatus & 0x000001ff);  
+
+  uint16_t len = (uint16_t)(rxStatus & 0x000001ff);
+  
   PN5180DEBUG(", len=");
   PN5180DEBUG(len);
   PN5180DEBUG("\n");
-  if (0 == len) return false;
-  if (511 == len) return false;
+
+ *resultPtr = readData(len);
+  if (0L == *resultPtr) {
+    PN5180DEBUG(F("*** ERROR in readData!\n"));
+    return ISO15693_EC_UNKNOWN_ERROR;
+  }
   
-  *resultPtr = (uint8_t *)malloc(len);
-  nfc->readData(*resultPtr, len);
-#ifdef DEBUG  
+#ifdef DEBUG
   Serial.print("Read=");
   for (int i=0; i<len; i++) {
     Serial.print(formatHex((*resultPtr)[i]));
-    if (i<len-1) Serial.print(":"); 
+    if (i<len-1) Serial.print(":");
   }
   Serial.println();
 #endif
-      
-  uint8_t responseFlags = *resultPtr[0];
+
+  uint32_t irqStatus = getIRQStatus();
+  if (0 == (RX_SOF_DET_IRQ_STAT & irqStatus)) { // no card detected
+     clearIRQStatus(TX_IRQ_STAT | IDLE_IRQ_STAT);
+     return EC_NO_CARD;
+  }
+
+  uint8_t responseFlags = (*resultPtr)[0];
   if (responseFlags & (1<<0)) { // error flag
+    uint8_t errorCode = (*resultPtr)[1];
+    
+#ifdef DEBUG
     PN5180DEBUG("ERROR code=");
-    PN5180DEBUG(formatHex(*resultPtr[1]));
+    PN5180DEBUG(formatHex(errorCode));
     PN5180DEBUG(" - ");
-    switch (*resultPtr[1]) {
+    switch (errorCode) {
       case 0x01:
         PN5180DEBUG(F("The command is not supported"));
         break;
@@ -345,36 +517,39 @@ bool PN5180ISO15693::issueISO15693Command(uint8_t *cmd, uint8_t cmdLen, uint8_t 
         break;
     }
     PN5180DEBUG("\n");
-    free(*resultPtr);
-    
-    return false;
-  }
-  
-  if (responseFlags & 0x80) { // extendsion flag
-    PN5180DEBUG("Extension flag is set!\n");
+#endif
+
+    if (errorCode >= 0xA0) { // custom command error codes
+      return ISO15693_EC_CUSTOM_CMD_ERROR;
+    }
+    else return (ISO15693ErrorCode)errorCode;
   }
 
-  return true;
+#ifdef DEBUG
+  if (responseFlags & (1<<3)) { // extendsion flag
+    PN5180DEBUG("Extension flag is set!\n");
+  }
+#endif
+
+  clearIRQStatus(RX_SOF_DET_IRQ_STAT | IDLE_IRQ_STAT | TX_IRQ_STAT | RX_IRQ_STAT);
+  return ISO15693_EC_OK;
 }
 
 bool PN5180ISO15693::setupRF() {
   PN5180DEBUG(F("Loading RF-Configuration...\n"));
-  if (nfc->loadRFConfig(0x0d, 0x8d)) {  // ISO15693 parameters
-    PN5180DEBUG(F("done."));
-  }
-  else return false;
-  
-  PN5180DEBUG(F("Turning ON RF field..."));
-  if (nfc->setRF_on()) {
-    PN5180DEBUG(F("done."));
+  if (loadRFConfig(0x0d, 0x8d)) {  // ISO15693 parameters
+    PN5180DEBUG(F("done.\n"));
   }
   else return false;
 
-//  nfc.writeRegister(TIMER1_CONFIG, 0x00000000);
-//  nfc.writeRegister(TIMER1_RELOAD, 0x00002557);
-  nfc->writeRegisterWithAndMask(SYSTEM_CONFIG, 0xfffffff8);  // Idle/StopCom Command
-  nfc->writeRegisterWithOrMask(SYSTEM_CONFIG, 0x00000003);   // Transceive Command
-//  nfc.writeRegister(TIMER1_CONFIG, 0x00100801);
+  PN5180DEBUG(F("Turning ON RF field...\n"));
+  if (setRF_on()) {
+    PN5180DEBUG(F("done.\n"));
+  }
+  else return false;
+
+  writeRegisterWithAndMask(SYSTEM_CONFIG, 0xfffffff8);  // Idle/StopCom Command
+  writeRegisterWithOrMask(SYSTEM_CONFIG, 0x00000003);   // Transceive Command
 
   return true;
 }
