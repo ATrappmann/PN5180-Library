@@ -51,13 +51,20 @@ PN5180::PN5180(uint8_t SSpin, uint8_t BUSYpin, uint8_t RSTpin) {
   PN5180_SPI_SETTINGS = SPISettings(7000000, MSBFIRST, SPI_MODE0);
 }
 
-void PN5180::begin() {
+void PN5180::begin() {  
   pinMode(PN5180_NSS, OUTPUT);
   pinMode(PN5180_BUSY, INPUT);
   pinMode(PN5180_RST, OUTPUT);
 
   digitalWrite(PN5180_NSS, HIGH); // disable
+
   SPI.begin();
+  PN5180DEBUG(F("SPI pinout: "));
+  PN5180DEBUG(F("SS=")); PN5180DEBUG(SS); 
+  PN5180DEBUG(F(", MOSI=")); PN5180DEBUG(MOSI);
+  PN5180DEBUG(F(", MISO=")); PN5180DEBUG(MISO);
+  PN5180DEBUG(F(", SCK=")); PN5180DEBUG(SCK);
+  PN5180DEBUG("\n");
 }
 
 void PN5180::end() {
@@ -274,11 +281,10 @@ bool PN5180::sendData(uint8_t *data, uint8_t len, uint8_t validBits) {
    */
 
   PN5180TransceiveStat transceiveState = getTransceiveState();
-#ifdef DEBUG
   if (PN5180_TS_WaitTransmit != transceiveState) {
-    PN5180DEBUG(F("*** ERROR: Transceiver not in state WaitTransmit!?"));
+    PN5180DEBUG(F("*** ERROR: Transceiver not in state WaitTransmit!?\n"));
+    return false;
   }
-#endif
 
   SPI.beginTransaction(PN5180_SPI_SETTINGS);
   transceiveCommand(buffer, len+2);
@@ -533,7 +539,7 @@ bool PN5180::clearIRQStatus(uint32_t irqMask) {
  * Get TRANSCEIVE_STATE from RF_STATUS register
  */
 #ifdef DEBUG 
-extern void showIRQStatus();
+extern void showIRQStatus(uint32_t);
 #endif
 
 PN5180TransceiveStat PN5180::getTransceiveState() {
@@ -542,7 +548,7 @@ PN5180TransceiveStat PN5180::getTransceiveState() {
   uint32_t rfStatus;
   if (!readRegister(RF_STATUS, &rfStatus)) {
 #ifdef DEBUG    
-    showIRQStatus();
+    showIRQStatus(getIRQStatus());
 #endif    
     PN5180DEBUG(F("ERROR reading RF_STATUS register.\n"));
     return PN5180TransceiveStat(0);

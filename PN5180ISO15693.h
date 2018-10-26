@@ -52,8 +52,13 @@ public:
 
   ISO15693ErrorCode getSystemInfo(uint8_t *uid, uint8_t *blockSize, uint8_t *numBlocks);
 
+  /*
+   * Helper functions
+   */
+public:   
   bool setupRF();
-
+  const __FlashStringHelper *strerror(ISO15693ErrorCode errno);
+    
 };
 
 #endif /* PN5180ISO15693_H */

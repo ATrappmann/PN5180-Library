@@ -480,44 +480,11 @@ ISO15693ErrorCode PN5180ISO15693::issueISO15693Command(uint8_t *cmd, uint8_t cmd
   if (responseFlags & (1<<0)) { // error flag
     uint8_t errorCode = (*resultPtr)[1];
     
-#ifdef DEBUG
     PN5180DEBUG("ERROR code=");
     PN5180DEBUG(formatHex(errorCode));
     PN5180DEBUG(" - ");
-    switch (errorCode) {
-      case 0x01:
-        PN5180DEBUG(F("The command is not supported"));
-        break;
-      case 0x02:
-        PN5180DEBUG(F("The command is not recognised"));
-        break;
-      case 0x03:
-        PN5180DEBUG(F("The option is not supported"));
-        break;
-      case 0x0f:
-        PN5180DEBUG(F("Unknown error"));
-        break;
-      case 0x10:
-        PN5180DEBUG(F("The specified block is not available (doesn’t exist)"));
-        break;
-      case 0x11:
-        PN5180DEBUG(F("The specified block is already locked and thus cannot be locked again"));
-        break;
-      case 0x12:
-        PN5180DEBUG(F("The specified block is locked and its content cannot be changed"));
-        break;
-      case 0x13:
-        PN5180DEBUG(F("The specified block was not successfully programmed"));
-        break;
-      case 0x14:
-        PN5180DEBUG(F("The specified block was not successfully locked"));
-        break;
-      default:
-        PN5180DEBUG(F("Custom command error code"));
-        break;
-    }
+    PN5180DEBUG(strerror(errorCode));
     PN5180DEBUG("\n");
-#endif
 
     if (errorCode >= 0xA0) { // custom command error codes
       return ISO15693_EC_CUSTOM_CMD_ERROR;
@@ -552,4 +519,29 @@ bool PN5180ISO15693::setupRF() {
   writeRegisterWithOrMask(SYSTEM_CONFIG, 0x00000003);   // Transceive Command
 
   return true;
+}
+
+const __FlashStringHelper *PN5180ISO15693::strerror(ISO15693ErrorCode errno) {
+  PN5180DEBUG(F("ISO15693ErrorCode="));
+  PN5180DEBUG(errno);
+  PN5180DEBUG("\n");
+  
+  switch (errno) {
+    case EC_NO_CARD: return F("No card detected!");
+    case ISO15693_EC_OK: return F("OK!");
+    case ISO15693_EC_NOT_SUPPORTED: return F("Command is not supported!");
+    case ISO15693_EC_NOT_RECOGNIZED: return F("Command is not recognized!");
+    case ISO15693_EC_OPTION_NOT_SUPPORTED: return F("Option is not suppored!");
+    case ISO15693_EC_UNKNOWN_ERROR: return F("Unknown error!");
+    case ISO15693_EC_BLOCK_NOT_AVAILABLE: return F("Specified block is not available!");
+    case ISO15693_EC_BLOCK_ALREADY_LOCKED: return F("Specified block is already locked!");
+    case ISO15693_EC_BLOCK_IS_LOCKED: return F("Specified block is locked and cannot be changed!");
+    case ISO15693_EC_BLOCK_NOT_PROGRAMMED: return F("Specified block was not successfully programmed!");
+    case ISO15693_EC_BLOCK_NOT_LOCKED: return F("Specified block was not successfully locked!");
+    default:
+      if ((errno >= 0xA0) && (errno <= 0xDF)) {
+        return F("Custom command error code!");
+      }
+      else return F("Undefined error code in ISO15693!");
+  }
 }
