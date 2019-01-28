@@ -252,7 +252,6 @@ void loop() {
     if (ISO15693_EC_OK == rc) {
       Serial.print(F("Wrote block #"));
       Serial.println(no);
-      break;
     }
     else {
       Serial.print(F("Error in writeSingleBlock #"));
