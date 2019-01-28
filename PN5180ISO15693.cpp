@@ -99,9 +99,9 @@ ISO15693ErrorCode PN5180ISO15693::getInventory(uint8_t *uid) {
  */
 ISO15693ErrorCode PN5180ISO15693::readSingleBlock(uint8_t *uid, uint8_t blockNo, uint8_t *blockData, uint8_t blockSize) {
   //                            flags, cmd, uid,             blockNo
-  uint8_t readSingleBlock[] = { 0x62, 0x20, 1,2,3,4,5,6,7,8, blockNo }; // UID has LSB first!
+  uint8_t readSingleBlock[] = { 0x22, 0x20, 1,2,3,4,5,6,7,8, blockNo }; // UID has LSB first!
   //                              |\- high data rate
-  //                              \-- options, addressed by UID
+  //                              \-- no options, addressed by UID
   for (int i=0; i<8; i++) {
     readSingleBlock[2+i] = uid[i];
   }
@@ -180,9 +180,9 @@ ISO15693ErrorCode PN5180ISO15693::readSingleBlock(uint8_t *uid, uint8_t blockNo,
  */
 ISO15693ErrorCode PN5180ISO15693::writeSingleBlock(uint8_t *uid, uint8_t blockNo, uint8_t *blockData, uint8_t blockSize) {
   //                            flags, cmd, uid,             blockNo
-  uint8_t writeSingleBlock[] = { 0x62, 0x21, 1,2,3,4,5,6,7,8, blockNo }; // UID has LSB first!
+  uint8_t writeSingleBlock[] = { 0x22, 0x21, 1,2,3,4,5,6,7,8, blockNo }; // UID has LSB first!
   //                               |\- high data rate
-  //                               \-- options, addressed by UID
+  //                               \-- no options, addressed by UID
 
   uint8_t writeCmdSize = sizeof(writeSingleBlock) + blockSize;
   uint8_t *writeCmd = (uint8_t*)malloc(writeCmdSize);
