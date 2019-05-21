@@ -18,7 +18,7 @@
 // Lesser General Public License for more details.
 //
 // BEWARE: SPI with an Arduino to a PN5180 module has to be at a level of 3.3V
-// use of logic-level converters from 5V->3.3V is absolutly neccessary
+// use of logic-level converters from 5V->3.3V is absolutely necessary
 // on most Arduinos for all input pins of PN5180!
 // If used with an ESP-32, there is no need for a logic-level converter, since
 // it operates on 3.3V already.
