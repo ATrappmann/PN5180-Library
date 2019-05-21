@@ -7,6 +7,13 @@ Arduino Uno / Arduino ESP-32 library for PN5180-NFC Module from NXP Semiconducto
 
 Release Notes:
 
+Version 1.3 - 21.05.2019
+	
+	* Initialized Reset pin with HIGH
+	* Made readBuffer static
+	* Typo fixes
+	* Data type corrections for length parameters
+	
 Version 1.2 - 28.01.2019
 
 	* Cleared Option bit in PN5180ISO15693::readSingleBlock and ::writeSingleBlock

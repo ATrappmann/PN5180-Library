@@ -71,9 +71,8 @@ private:
   uint8_t PN5180_RST;
 
   SPISettings PN5180_SPI_SETTINGS;
+  static uint8_t readBuffer[508];
 
-  uint8_t readBuffer[508];
-  
 public:
   PN5180(uint8_t SSpin, uint8_t BUSYpin, uint8_t RSTpin);
 
@@ -95,12 +94,12 @@ public:
   bool readRegister(uint8_t reg, uint32_t *value);
 
   /* cmd 0x07 */
-  bool readEEprom(uint8_t addr, uint8_t *buffer, uint8_t len);
+  bool readEEprom(uint8_t addr, uint8_t *buffer, int len);
 
   /* cmd 0x09 */
-  bool sendData(uint8_t *data, uint8_t len, uint8_t validBits = 0);
+  bool sendData(uint8_t *data, int len, uint8_t validBits = 0);
   /* cmd 0x0a */
-  uint8_t * readData(uint16_t len);
+  uint8_t * readData(int len);
 
   /* cmd 0x11 */
   bool loadRFConfig(uint8_t txConf, uint8_t rxConf);
@@ -118,7 +117,7 @@ public:
 
   uint32_t getIRQStatus();
   bool clearIRQStatus(uint32_t irqMask);
-  
+
   PN5180TransceiveStat getTransceiveState();
 
   /*

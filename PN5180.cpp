@@ -36,6 +36,8 @@
 #define PN5180_RF_ON                    (0x16)
 #define PN5180_RF_OFF                   (0x17)
 
+uint8_t PN5180::readBuffer[508];
+
 PN5180::PN5180(uint8_t SSpin, uint8_t BUSYpin, uint8_t RSTpin) {
   PN5180_NSS = SSpin;
   PN5180_BUSY = BUSYpin;
@@ -51,16 +53,17 @@ PN5180::PN5180(uint8_t SSpin, uint8_t BUSYpin, uint8_t RSTpin) {
   PN5180_SPI_SETTINGS = SPISettings(7000000, MSBFIRST, SPI_MODE0);
 }
 
-void PN5180::begin() {  
+void PN5180::begin() {
   pinMode(PN5180_NSS, OUTPUT);
   pinMode(PN5180_BUSY, INPUT);
   pinMode(PN5180_RST, OUTPUT);
 
   digitalWrite(PN5180_NSS, HIGH); // disable
+  digitalWrite(PN5180_RST, HIGH); // no reset
 
   SPI.begin();
   PN5180DEBUG(F("SPI pinout: "));
-  PN5180DEBUG(F("SS=")); PN5180DEBUG(SS); 
+  PN5180DEBUG(F("SS=")); PN5180DEBUG(SS);
   PN5180DEBUG(F(", MOSI=")); PN5180DEBUG(MOSI);
   PN5180DEBUG(F(", MISO=")); PN5180DEBUG(MISO);
   PN5180DEBUG(F(", SCK=")); PN5180DEBUG(SCK);
@@ -200,7 +203,7 @@ bool PN5180::readRegister(uint8_t reg, uint32_t *value) {
  * not go beyond EEPROM address 254. If the condition is not fulfilled, an exception is
  * raised.
  */
-bool PN5180::readEEprom(uint8_t addr, uint8_t *buffer, uint8_t len) {
+bool PN5180::readEEprom(uint8_t addr, uint8_t *buffer, int len) {
   if ((addr > 254) || ((addr+len) > 254)) {
     PN5180DEBUG(F("ERROR: Reading beyond addr 254!\n"));
     return false;
@@ -245,7 +248,7 @@ bool PN5180::readEEprom(uint8_t addr, uint8_t *buffer, uint8_t len) {
  * called during an ongoing RF transmission. Transceiver must be in ‘WaitTransmit’ state
  * with ‘Transceive’ command set. If the condition is not fulfilled, an exception is raised.
  */
-bool PN5180::sendData(uint8_t *data, uint8_t len, uint8_t validBits) {
+bool PN5180::sendData(uint8_t *data, int len, uint8_t validBits) {
   if (len > 260) {
     PN5180DEBUG(F("ERROR: sendData with more than 260 bytes is not supported!\n"));
     return false;
@@ -265,7 +268,7 @@ bool PN5180::sendData(uint8_t *data, uint8_t len, uint8_t validBits) {
   uint8_t buffer[len+2];
   buffer[0] = PN5180_SEND_DATA;
   buffer[1] = validBits; // number of valid bits of last byte are transmitted (0 = all bits are transmitted)
-  for (uint8_t i=0; i<len; i++) {
+  for (int i=0; i<len; i++) {
     buffer[2+i] = data[i];
   }
 
@@ -303,12 +306,12 @@ bool PN5180::sendData(uint8_t *data, uint8_t len, uint8_t validBits) {
  * preceding an RF data reception, no exception is raised but the data read back from the
  * reception buffer is invalid. If the condition is not fulfilled, an exception is raised.
  */
-uint8_t * PN5180::readData(uint16_t len) {
+uint8_t * PN5180::readData(int len) {
   if (len > 508) {
     Serial.println(F("*** FATAL: Reading more than 508 bytes is not supported!"));
     return 0L;
   }
-  
+
   PN5180DEBUG(F("Reading Data (len="));
   PN5180DEBUG(len);
   PN5180DEBUG(F(")...\n"));
@@ -458,7 +461,7 @@ bool PN5180::transceiveCommand(uint8_t *sendBuffer, size_t sendBufferLen, uint8_
   // 2.
   for (uint8_t i=0; i<sendBufferLen; i++) {
     SPI.transfer(sendBuffer[i]);
-   }
+  }
   // 3.
   while(HIGH != digitalRead(PN5180_BUSY));  // wait until BUSY is high
   // 4.
@@ -504,9 +507,9 @@ void PN5180::reset() {
   delay(10);
   digitalWrite(PN5180_RST, HIGH); // 2ms to ramp up required
   delay(10);
-  
+
   while (0 == (IDLE_IRQ_STAT & getIRQStatus())); // wait for system to start up
-  
+
   clearIRQStatus(0xffffffff); // clear all flags
 }
 
@@ -538,7 +541,7 @@ bool PN5180::clearIRQStatus(uint32_t irqMask) {
 /*
  * Get TRANSCEIVE_STATE from RF_STATUS register
  */
-#ifdef DEBUG 
+#ifdef DEBUG
 extern void showIRQStatus(uint32_t);
 #endif
 
@@ -547,9 +550,9 @@ PN5180TransceiveStat PN5180::getTransceiveState() {
 
   uint32_t rfStatus;
   if (!readRegister(RF_STATUS, &rfStatus)) {
-#ifdef DEBUG    
+#ifdef DEBUG
     showIRQStatus(getIRQStatus());
-#endif    
+#endif
     PN5180DEBUG(F("ERROR reading RF_STATUS register.\n"));
     return PN5180TransceiveStat(0);
   }
