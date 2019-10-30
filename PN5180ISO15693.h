@@ -43,7 +43,6 @@ public:
   
 private:
   ISO15693ErrorCode issueISO15693Command(uint8_t *cmd, uint8_t cmdLen, uint8_t **resultPtr);
-
 public:
   ISO15693ErrorCode getInventory(uint8_t *uid);
 
@@ -51,7 +50,13 @@ public:
   ISO15693ErrorCode writeSingleBlock(uint8_t *uid, uint8_t blockNo, uint8_t *blockData, uint8_t blockSize);
 
   ISO15693ErrorCode getSystemInfo(uint8_t *uid, uint8_t *blockSize, uint8_t *numBlocks);
-
+   
+  // ICODE SLIX2 specific commands, see https://www.nxp.com/docs/en/data-sheet/SL2S2602.pdf
+  ISO15693ErrorCode getRandomNumber(uint8_t *randomData);
+  ISO15693ErrorCode setPassword(uint8_t *password, uint8_t *random);
+  ISO15693ErrorCode enablePrivacy(uint8_t *password, uint8_t *random);
+  ISO15693ErrorCode unlockICODESLIX2(uint8_t *password);
+  ISO15693ErrorCode lockICODESLIX2(uint8_t *password);
   /*
    * Helper functions
    */
