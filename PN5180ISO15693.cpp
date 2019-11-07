@@ -375,6 +375,82 @@ ISO15693ErrorCode PN5180ISO15693::getSystemInfo(uint8_t *uid, uint8_t *blockSize
   return ISO15693_EC_OK;
 }
 
+
+// ICODE SLIX specific commands
+
+/*
+ * The GET RANDOM NUMBER command is required to receive a random number from the label IC. 
+ * The passwords that will be transmitted with the SET PASSWORD,ENABLEPRIVACY and DESTROY commands 
+ * have to be calculated with the password and therandom number (see Section 9.5.3.2 "SET PASSWORD")
+ */
+ISO15693ErrorCode PN5180ISO15693::getRandomNumber(uint8_t *randomData) {
+  uint8_t getrandom[] = {0x02, 0xB2, 0x04};
+  uint8_t *readBuffer;
+  ISO15693ErrorCode rc = issueISO15693Command(getrandom, sizeof(getrandom), &readBuffer);
+  if (rc == ISO15693_EC_OK) {
+    randomData[0] = readBuffer[1];
+    randomData[1] = readBuffer[2];
+  }
+  return rc;
+}
+
+/*
+ * The SET PASSWORD command enables the different passwords to be transmitted to the label 
+ * to access the different protected functionalities of the following commands. 
+ * The SET PASSWORD command has to be executed just once for the related passwords if the label is powered
+ */
+ISO15693ErrorCode PN5180ISO15693::setPassword(uint8_t *password, uint8_t *random) {
+  uint8_t setPassword[] = {0x02, 0xB3, 0x04, 0x04, 0x00, 0x00, 0x00, 0x00};
+  uint8_t *readBuffer;
+  setPassword[4] = password[0] ^ random[0];
+  setPassword[5] = password[1] ^ random[1];
+  setPassword[6] = password[2] ^ random[0];
+  setPassword[7] = password[3] ^ random[1];
+  ISO15693ErrorCode rc = issueISO15693Command(setPassword, sizeof(setPassword), &readBuffer);
+  return rc;
+}
+
+ISO15693ErrorCode PN5180ISO15693::enablePrivacy(uint8_t *password, uint8_t *random) {
+  uint8_t setPrivacy[] = {0x02, 0xBA, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+  uint8_t *readBuffer;
+  setPrivacy[3] = password[0] ^ random[0];
+  setPrivacy[4] = password[1] ^ random[1];
+  setPrivacy[5] = password[2] ^ random[0];
+  setPrivacy[6] = password[3] ^ random[1];
+  ISO15693ErrorCode rc = issueISO15693Command(setPrivacy, sizeof(setPrivacy), &readBuffer);
+  return rc;
+}
+
+
+// unlock a ICODE SLIX2 tag with given password
+ISO15693ErrorCode PN5180ISO15693::unlockICODESLIX2(uint8_t *password) {
+  // get a random number from the tag
+  uint8_t random[]= {0x00, 0x00};
+  ISO15693ErrorCode rc = getRandomNumber(random);
+  if (rc != ISO15693_EC_OK) {
+    return rc;
+  }
+  
+  // set password to unlock the tag
+  rc = setPassword(password, random);
+  return rc; 
+}
+
+// lock a ICODE SLIX2 tag with given password (set to privacy mode)
+ISO15693ErrorCode PN5180ISO15693::lockICODESLIX2(uint8_t *password) {
+  // get a random number from the tag
+  uint8_t random[]= {0x00, 0x00};
+  ISO15693ErrorCode rc = getRandomNumber(random);
+  if (rc != ISO15693_EC_OK) {
+    return rc;
+  }
+  
+  // enable privacy command to lock the tag
+  rc = enablePrivacy(password, random);
+  return rc; 
+}
+
+
 /*
  * ISO 15693 - Protocol
  *
