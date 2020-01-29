@@ -7,6 +7,10 @@ Arduino Uno / Arduino ESP-32 library for PN5180-NFC Module from NXP Semiconducto
 
 Release Notes:
 
+Version 1.5 - 29.01.2020
+
+	* Fixed offset in readSingleBlock. Was off by 1.
+	
 Version 1.4 - 13.11.2019
 
 	* ICODE SLIX2 specific commands, see https://www.nxp.com/docs/en/data-sheet/SL2S2602.pdf

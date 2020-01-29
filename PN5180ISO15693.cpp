@@ -22,7 +22,7 @@
 #include "PN5180ISO15693.h"
 #include "Debug.h"
 
-PN5180ISO15693::PN5180ISO15693(uint8_t SSpin, uint8_t BUSYpin, uint8_t RSTpin) 
+PN5180ISO15693::PN5180ISO15693(uint8_t SSpin, uint8_t BUSYpin, uint8_t RSTpin)
               : PN5180(SSpin, BUSYpin, RSTpin) {
 }
 
@@ -41,9 +41,9 @@ ISO15693ErrorCode PN5180ISO15693::getInventory(uint8_t *uid) {
   PN5180DEBUG(F("Get Inventory...\n"));
 
   for (int i=0; i<8; i++) {
-    uid[i] = 0;  
+    uid[i] = 0;
   }
-  
+
   uint8_t *readBuffer;
   ISO15693ErrorCode rc = issueISO15693Command(inventory, sizeof(inventory), &readBuffer);
   if (ISO15693_EC_OK != rc) {
@@ -55,7 +55,7 @@ ISO15693ErrorCode PN5180ISO15693::getInventory(uint8_t *uid) {
   PN5180DEBUG(F(", Data Storage Format ID: "));
   PN5180DEBUG(formatHex(readBuffer[1]));
   PN5180DEBUG(F(", UID: "));
-  
+
   for (int i=0; i<8; i++) {
     uid[i] = readBuffer[2+i];
 #ifdef DEBUG
@@ -63,7 +63,7 @@ ISO15693ErrorCode PN5180ISO15693::getInventory(uint8_t *uid) {
     if (i<2) PN5180DEBUG(":");
 #endif
   }
-  
+
   PN5180DEBUG("\n");
 
   return ISO15693_EC_OK;
@@ -126,13 +126,13 @@ ISO15693ErrorCode PN5180ISO15693::readSingleBlock(uint8_t *uid, uint8_t blockNo,
   }
 
   PN5180DEBUG("Value=");
-  
+
   for (int i=0; i<blockSize; i++) {
-    blockData[i] = resultPtr[2+i];
+    blockData[i] = resultPtr[1+i];
 #ifdef DEBUG    
     PN5180DEBUG(formatHex(blockData[i]));
     PN5180DEBUG(" ");
-#endif    
+#endif
   }
 
 #ifdef DEBUG
@@ -291,7 +291,7 @@ ISO15693ErrorCode PN5180ISO15693::getSystemInfo(uint8_t *uid, uint8_t *blockSize
   for (int i=0; i<8; i++) {
     uid[i] = readBuffer[2+i];
   }
-  
+
 #ifdef DEBUG
   PN5180DEBUG("UID=");
   for (int i=0; i<8; i++) {
@@ -300,7 +300,7 @@ ISO15693ErrorCode PN5180ISO15693::getSystemInfo(uint8_t *uid, uint8_t *blockSize
   }
   PN5180DEBUG("\n");
 #endif
-  
+
   uint8_t *p = &readBuffer[10];
 
   uint8_t infoFlags = readBuffer[1];
@@ -311,9 +311,9 @@ ISO15693ErrorCode PN5180ISO15693::getSystemInfo(uint8_t *uid, uint8_t *blockSize
     PN5180DEBUG("\n");
   }
 #ifdef DEBUG
-  else PN5180DEBUG(F("No DSFID\n"));  
+  else PN5180DEBUG(F("No DSFID\n"));
 #endif
-  
+
   if (infoFlags & 0x02) { // AFI flag
     uint8_t afi = *p++;
     PN5180DEBUG(F("AFI="));  // Application family identifier
@@ -361,7 +361,7 @@ ISO15693ErrorCode PN5180ISO15693::getSystemInfo(uint8_t *uid, uint8_t *blockSize
 #ifdef DEBUG
   else PN5180DEBUG(F("No VICC memory size\n"));
 #endif
-   
+
   if (infoFlags & 0x08) { // IC reference
     uint8_t icRef = *p++;
     PN5180DEBUG("IC Ref=");
@@ -379,8 +379,8 @@ ISO15693ErrorCode PN5180ISO15693::getSystemInfo(uint8_t *uid, uint8_t *blockSize
 // ICODE SLIX specific commands
 
 /*
- * The GET RANDOM NUMBER command is required to receive a random number from the label IC. 
- * The passwords that will be transmitted with the SET PASSWORD,ENABLEPRIVACY and DESTROY commands 
+ * The GET RANDOM NUMBER command is required to receive a random number from the label IC.
+ * The passwords that will be transmitted with the SET PASSWORD,ENABLEPRIVACY and DESTROY commands
  * have to be calculated with the password and therandom number (see Section 9.5.3.2 "SET PASSWORD")
  */
 ISO15693ErrorCode PN5180ISO15693::getRandomNumber(uint8_t *randomData) {
@@ -395,8 +395,8 @@ ISO15693ErrorCode PN5180ISO15693::getRandomNumber(uint8_t *randomData) {
 }
 
 /*
- * The SET PASSWORD command enables the different passwords to be transmitted to the label 
- * to access the different protected functionalities of the following commands. 
+ * The SET PASSWORD command enables the different passwords to be transmitted to the label
+ * to access the different protected functionalities of the following commands.
  * The SET PASSWORD command has to be executed just once for the related passwords if the label is powered
  */
 ISO15693ErrorCode PN5180ISO15693::setPassword(uint8_t *password, uint8_t *random) {
@@ -430,10 +430,10 @@ ISO15693ErrorCode PN5180ISO15693::unlockICODESLIX2(uint8_t *password) {
   if (rc != ISO15693_EC_OK) {
     return rc;
   }
-  
+
   // set password to unlock the tag
   rc = setPassword(password, random);
-  return rc; 
+  return rc;
 }
 
 // lock a ICODE SLIX2 tag with given password (set to privacy mode)
@@ -444,10 +444,10 @@ ISO15693ErrorCode PN5180ISO15693::lockICODESLIX2(uint8_t *password) {
   if (rc != ISO15693_EC_OK) {
     return rc;
   }
-  
+
   // enable privacy command to lock the tag
   rc = enablePrivacy(password, random);
-  return rc; 
+  return rc;
 }
 
 
@@ -518,15 +518,15 @@ ISO15693ErrorCode PN5180ISO15693::issueISO15693Command(uint8_t *cmd, uint8_t cmd
   if (0 == (getIRQStatus() & RX_SOF_DET_IRQ_STAT)) {
     return EC_NO_CARD;
   }
-  
+
   uint32_t rxStatus;
   readRegister(RX_STATUS, &rxStatus);
-  
+
   PN5180DEBUG(F("RX-Status="));
   PN5180DEBUG(formatHex(rxStatus));
 
   uint16_t len = (uint16_t)(rxStatus & 0x000001ff);
-  
+
   PN5180DEBUG(", len=");
   PN5180DEBUG(len);
   PN5180DEBUG("\n");
@@ -536,7 +536,7 @@ ISO15693ErrorCode PN5180ISO15693::issueISO15693Command(uint8_t *cmd, uint8_t cmd
     PN5180DEBUG(F("*** ERROR in readData!\n"));
     return ISO15693_EC_UNKNOWN_ERROR;
   }
-  
+
 #ifdef DEBUG
   Serial.print("Read=");
   for (int i=0; i<len; i++) {
@@ -555,7 +555,7 @@ ISO15693ErrorCode PN5180ISO15693::issueISO15693Command(uint8_t *cmd, uint8_t cmd
   uint8_t responseFlags = (*resultPtr)[0];
   if (responseFlags & (1<<0)) { // error flag
     uint8_t errorCode = (*resultPtr)[1];
-    
+
     PN5180DEBUG("ERROR code=");
     PN5180DEBUG(formatHex(errorCode));
     PN5180DEBUG(" - ");
@@ -601,7 +601,7 @@ const __FlashStringHelper *PN5180ISO15693::strerror(ISO15693ErrorCode errno) {
   PN5180DEBUG(F("ISO15693ErrorCode="));
   PN5180DEBUG(errno);
   PN5180DEBUG("\n");
-  
+
   switch (errno) {
     case EC_NO_CARD: return F("No card detected!");
     case ISO15693_EC_OK: return F("OK!");

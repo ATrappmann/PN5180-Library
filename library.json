@@ -1,0 +1,20 @@
+{
+	"name": "PN5180-Library",
+	"frameworks": "Arduino",
+	"keywords": "NXP NFC PN5180",
+	"description": "NXP NFC PN5180 Library for Arduino",
+	"authors":
+	[
+		{
+			"name": "Andreas Trappmann",
+			"email": "andreas.trappmann@t-online.de",
+			"url": "https://github.com/ATrappmann/PN5180-Library",
+			"maintainer": true
+		}
+	],
+	"repository":
+	{
+		"type": "git",
+		"url": "https://github.com/ATrappmann/PN5180-Library"
+	}
+}
