@@ -142,6 +142,19 @@ iClassErrorCode PN5180iClass::Read(uint8_t blockNum, uint8_t *blockData) {
   return ICLASS_EC_OK;
 }
 
+iClassErrorCode PN5180iClass::Halt() {
+  PN5180DEBUG(F("Halt...\n"));
+
+  uint8_t halt[] = {ICLASS_CMD_HALT};
+
+  uint8_t *readBuffer;
+  iClassErrorCode rc = issueiClassCommand(halt, sizeof(halt), &readBuffer);
+  if (ICLASS_EC_OK != rc) {
+    return rc;
+  }
+
+  return ICLASS_EC_OK;
+}
 
 iClassErrorCode PN5180iClass::issueiClassCommand(uint8_t *cmd, uint8_t cmdLen, uint8_t **resultPtr) {
 #ifdef DEBUG

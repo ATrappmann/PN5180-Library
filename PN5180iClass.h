@@ -22,6 +22,7 @@
 #include "PN5180.h"
 
 enum {
+  ICLASS_CMD_HALT = 0x00,
   ICLASS_CMD_ACTALL = 0x0A,
   ICLASS_CMD_IDENTIFY = 0x0C,
   ICLASS_CMD_SELECT = 0x81,
@@ -50,6 +51,7 @@ public:
   iClassErrorCode ReadCheck(uint8_t *ccnr);
   iClassErrorCode Check(uint8_t *mac);
   iClassErrorCode Read(uint8_t blockNum, uint8_t *blockData);
+  iClassErrorCode Halt();
 
   /*
    * Helper functions
