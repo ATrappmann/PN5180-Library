@@ -203,6 +203,11 @@ iClassErrorCode PN5180iClass::issueiClassCommand(uint8_t *cmd, uint8_t cmdLen, u
      return EC_NO_CARD;
   }
 
+  // Datasheet Picopass 2K V1.0  section 4.3.2
+  if (RX_SOF_DET_IRQ_STAT == (RX_SOF_DET_IRQ_STAT & irqStatus)) {
+    return ICLASS_EC_OK;
+  }
+
   uint8_t responseFlags = (*resultPtr)[0];
   if (responseFlags & (1<<0)) { // error flag
     uint8_t errorCode = (*resultPtr)[1];
@@ -212,18 +217,6 @@ iClassErrorCode PN5180iClass::issueiClassCommand(uint8_t *cmd, uint8_t cmdLen, u
     PN5180DEBUG(" - ");
     PN5180DEBUG(strerror(errorCode));
     PN5180DEBUG("\n");
-
-    switch (errorCode) {
-      // I don't know what these are, but they don't seem to be a real error
-      case 0x27:
-      case 0x43:
-      case 0x68:
-      case 0xA0:
-      case 0xFA:
-        return ICLASS_EC_OK;
-      default:
-        return (iClassErrorCode)errorCode;
-    }
 
     return (iClassErrorCode)errorCode;
   }
