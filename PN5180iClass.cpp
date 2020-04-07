@@ -28,6 +28,10 @@ PN5180iClass::PN5180iClass(uint8_t SSpin, uint8_t BUSYpin, uint8_t RSTpin) : PN5
 iClassErrorCode PN5180iClass::ActivateAll() {
   PN5180DEBUG(F("Activate All...\n"));
 
+  // Disable CRCs
+  writeRegister(CRC_TX_CONFIG, 0x00000000);
+  writeRegister(CRC_RX_CONFIG, 0x00000000);
+
   uint8_t actall[] = {ICLASS_CMD_ACTALL};
 
   uint8_t *readBuffer;
@@ -41,6 +45,9 @@ iClassErrorCode PN5180iClass::ActivateAll() {
 
 iClassErrorCode PN5180iClass::Identify(uint8_t *csn) {
   PN5180DEBUG(F("Identify...\n"));
+
+  writeRegister(CRC_TX_CONFIG, 0x00000000);
+  writeRegister(CRC_RX_CONFIG, 0x00000029);
 
   uint8_t identify[] = {ICLASS_CMD_IDENTIFY};
 
@@ -66,6 +73,9 @@ iClassErrorCode PN5180iClass::Identify(uint8_t *csn) {
 iClassErrorCode PN5180iClass::Select(uint8_t *csn) {
   PN5180DEBUG(F("Select...\n"));
 
+  writeRegister(CRC_TX_CONFIG, 0x00000000);
+  writeRegister(CRC_RX_CONFIG, 0x00000029);
+
   uint8_t select[] = {ICLASS_CMD_SELECT, 1, 2, 3, 4, 5, 6, 7, 8};
 
   for (int i=0; i<8; i++) {
@@ -89,6 +99,10 @@ iClassErrorCode PN5180iClass::Select(uint8_t *csn) {
 iClassErrorCode PN5180iClass::ReadCheck(uint8_t *ccnr) {
   PN5180DEBUG(F("ReadCheck...\n"));
 
+  // Disable CRCs
+  writeRegister(CRC_TX_CONFIG, 0x00000000);
+  writeRegister(CRC_RX_CONFIG, 0x00000000);
+
   uint8_t readcheck[] = {ICLASS_CMD_READCHECK, 0x02};
 
   uint8_t *readBuffer;
@@ -106,6 +120,10 @@ iClassErrorCode PN5180iClass::ReadCheck(uint8_t *ccnr) {
 
 iClassErrorCode PN5180iClass::Check(uint8_t *mac) {
   PN5180DEBUG(F("Check...\n"));
+
+  // Disable CRCs
+  writeRegister(CRC_TX_CONFIG, 0x00000000);
+  writeRegister(CRC_RX_CONFIG, 0x00000000);
 
   uint8_t check[] = {ICLASS_CMD_CHECK, 0, 0, 0, 0, 1, 2, 3, 4};
 
@@ -126,8 +144,10 @@ iClassErrorCode PN5180iClass::Check(uint8_t *mac) {
 iClassErrorCode PN5180iClass::Read(uint8_t blockNum, uint8_t *blockData) {
   PN5180DEBUG(F("Read...\n"));
 
-  // TODO: Calculate or enable CRC, these values are for block 7
-  uint8_t read[] = {ICLASS_CMD_READ, blockNum, 0xcc, 0x47};
+  writeRegister(CRC_TX_CONFIG, 0x00000069);
+  writeRegister(CRC_RX_CONFIG, 0x00000029);
+
+  uint8_t read[] = {ICLASS_CMD_READ, blockNum};
 
   uint8_t *readBuffer;
   iClassErrorCode rc = issueiClassCommand(read, sizeof(read), &readBuffer);
@@ -144,6 +164,10 @@ iClassErrorCode PN5180iClass::Read(uint8_t blockNum, uint8_t *blockData) {
 
 iClassErrorCode PN5180iClass::Halt() {
   PN5180DEBUG(F("Halt...\n"));
+
+  // Disable CRCs
+  writeRegister(CRC_TX_CONFIG, 0x00000000);
+  writeRegister(CRC_RX_CONFIG, 0x00000000);
 
   uint8_t halt[] = {ICLASS_CMD_HALT};
 
@@ -205,6 +229,7 @@ iClassErrorCode PN5180iClass::issueiClassCommand(uint8_t *cmd, uint8_t cmdLen, u
 
   // Datasheet Picopass 2K V1.0  section 4.3.2
   if (RX_SOF_DET_IRQ_STAT == (RX_SOF_DET_IRQ_STAT & irqStatus)) {
+    clearIRQStatus(RX_SOF_DET_IRQ_STAT);
     return ICLASS_EC_OK;
   }
 
@@ -246,9 +271,6 @@ bool PN5180iClass::setupRF() {
 
   writeRegisterWithAndMask(SYSTEM_CONFIG, 0xfffffff8);  // Idle/StopCom Command
   writeRegisterWithOrMask(SYSTEM_CONFIG, 0x00000003);   // Transceive Command
-  // Disable CRCs
-  writeRegister(CRC_TX_CONFIG, 0x00000000);
-  writeRegister(CRC_RX_CONFIG, 0x00000000);
 
   return true;
 }
