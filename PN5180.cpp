@@ -28,6 +28,7 @@
 #define PN5180_WRITE_REGISTER_OR_MASK   (0x01)
 #define PN5180_WRITE_REGISTER_AND_MASK  (0x02)
 #define PN5180_READ_REGISTER            (0x04)
+#define PN5180_WRITE_EEPROM             (0x06)
 #define PN5180_READ_EEPROM              (0x07)
 #define PN5180_SEND_DATA                (0x09)
 #define PN5180_READ_DATA                (0x0A)
@@ -191,6 +192,30 @@ bool PN5180::readRegister(uint8_t reg, uint32_t *value) {
 
   return true;
 }
+
+/*
+ * WRITE_EEPROM - 0x06
+ */
+ bool PN5180::writeEEPROM(uint8_t addr, uint8_t *buffer, int len) {
+   if ((addr > 254) || ((addr+len) > 254)) {
+     PN5180DEBUG(F("ERROR: Reading beyond addr 254!\n"));
+     return false;
+   }
+
+   PN5180DEBUG(F("Writing to EEPROM at 0x"));
+   PN5180DEBUG(formatHex(addr));
+   PN5180DEBUG(F(", size="));
+   PN5180DEBUG(len);
+   PN5180DEBUG(F("...\n"));
+
+   uint8_t cmd[2] = { PN5180_WRITE_EEPROM, addr };
+
+   SPI.beginTransaction(PN5180_SPI_SETTINGS);
+   bool rc = transceiveCommand(cmd, 2, buffer, len);
+   SPI.endTransaction();
+
+   return rc;
+ }
 
 /*
  * READ_EEPROM - 0x07

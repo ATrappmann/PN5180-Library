@@ -93,6 +93,9 @@ public:
   /* cmd 0x04 */
   bool readRegister(uint8_t reg, uint32_t *value);
 
+  /* cmd 0x06 */
+  bool writeEEPROM(uint8_t addr, uint8_t *buffer, int len);
+  
   /* cmd 0x07 */
   bool readEEprom(uint8_t addr, uint8_t *buffer, int len);
 
