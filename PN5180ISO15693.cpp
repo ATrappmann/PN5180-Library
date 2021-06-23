@@ -129,7 +129,7 @@ ISO15693ErrorCode PN5180ISO15693::readSingleBlock(uint8_t *uid, uint8_t blockNo,
 
   for (int i=0; i<blockSize; i++) {
     blockData[i] = resultPtr[1+i];
-#ifdef DEBUG    
+#ifdef DEBUG
     PN5180DEBUG(formatHex(blockData[i]));
     PN5180DEBUG(" ");
 #endif
@@ -514,9 +514,13 @@ ISO15693ErrorCode PN5180ISO15693::issueISO15693Command(uint8_t *cmd, uint8_t cmd
 
   sendData(cmd, cmdLen);
   delay(10);
-
-  if (0 == (getIRQStatus() & RX_SOF_DET_IRQ_STAT)) {
+  uint32_t status = getIRQStatus();
+  if (0 == (status & RX_SOF_DET_IRQ_STAT)) {
     return EC_NO_CARD;
+  }
+  while (0 == (status & RX_IRQ_STAT)) {
+    delay(10);
+    status = getIRQStatus();
   }
 
   uint32_t rxStatus;

@@ -95,8 +95,8 @@ public:
   bool readRegister(uint8_t reg, uint32_t *value);
 
   /* cmd 0x06 */
-  bool writeEEPROM(uint8_t addr, uint8_t *buffer, int len);
-  
+  bool writeEEPROM(uint8_t addr, uint8_t *data, int len);
+
   /* cmd 0x07 */
   bool readEEprom(uint8_t addr, uint8_t *buffer, int len);
 
