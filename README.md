@@ -5,7 +5,8 @@ ESP-32 library for PN5180-NFC Module from NXP Semiconductors
 Hardware: 
 
 Done: New Design of external Antenna. Reading Distance für Credit Card Size in Center of Antenna = 22cm
-In Work: Redsign of a 4W RF Ampfliefer for extend the read range up to 50cm.
+
+In Work: design of an 4W RF Ampfliefer for extend the read range up to 50cm.
 
 Software:
 
