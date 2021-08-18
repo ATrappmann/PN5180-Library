@@ -163,6 +163,11 @@ void setup() {
 uint32_t loopCnt = 0;
 bool errorFlag = false;
 
+//SLIX2 Passwords, first is manufacture standard
+uint8_t standardpassword[] = {0x0F, 0x0F, 0x0F, 0x0F};
+//New Password
+uint8_t password[] = {0x12, 0x34, 0x56, 0x78};
+
 void loop() {
   if (errorFlag) {
     uint32_t irqStatus = nfc.getIRQStatus();
@@ -184,12 +189,26 @@ void loop() {
 
 /*
   // code for unlocking an ICODE SLIX2 protected tag   
-  uint8_t password[] = {0x5B, 0x6E, 0xFD, 0x7F};
   ISO15693ErrorCode myrc = nfc.unlockICODESLIX2(password);
   if (ISO15693_EC_OK == myrc) {
     Serial.println("unlockICODESLIX2 successful");
   }
 */
+  
+/* 
+  // code for set a new SLIX2 privacy password
+  nfc.getInventory(uid);
+  Serial.println("set new password"); 
+  
+  ISO15693ErrorCode myrc2 = nfc.newpasswordICODESLIX2(password, standardpassword, uid);
+  if (ISO15693_EC_OK == myrc2) { 
+   Serial.println("sucess! new password set");    
+  }else{
+   Serial.println("fail! no new password set: "); 
+   Serial.println(nfc.strerror(myrc2));  
+   Serial.println(" "); 
+  } 
+ */
   
   uint8_t uid[8];
   ISO15693ErrorCode rc = nfc.getInventory(uid);
