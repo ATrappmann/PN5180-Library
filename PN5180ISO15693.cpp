@@ -411,13 +411,24 @@ ISO15693ErrorCode PN5180ISO15693::setPassword(uint8_t *password, uint8_t *random
 }
 
 ISO15693ErrorCode PN5180ISO15693::enablePrivacy(uint8_t *password, uint8_t *random) {
-  uint8_t setPrivacy[] = {0x02, 0xBA, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+  uint8_t setPrivacy[] = {0x02, 0xBA, 0x04, 0x00, 0x00, 0x00, 0x00};
   uint8_t *readBuffer;
   setPrivacy[3] = password[0] ^ random[0];
   setPrivacy[4] = password[1] ^ random[1];
   setPrivacy[5] = password[2] ^ random[0];
   setPrivacy[6] = password[3] ^ random[1];
   ISO15693ErrorCode rc = issueISO15693Command(setPrivacy, sizeof(setPrivacy), &readBuffer);
+  return rc;
+}
+
+ISO15693ErrorCode PN5180ISO15693::writePassword(uint8_t *password, uint8_t *uid) {
+  uint8_t writePassword[] = {0x22, 0xB4, 0x04, uid[0], uid[1], uid[2], uid[3], uid[4], uid[5], uid[6], uid[7], 0x04, 0x00, 0x00, 0x00, 0x00};
+  uint8_t *readBuffer;
+  writePassword[12] = password[0];
+  writePassword[13] = password[1];
+  writePassword[14] = password[2];
+  writePassword[15] = password[3];
+  ISO15693ErrorCode rc = issueISO15693Command(writePassword, sizeof(writePassword), &readBuffer);
   return rc;
 }
 
@@ -448,6 +459,29 @@ ISO15693ErrorCode PN5180ISO15693::lockICODESLIX2(uint8_t *password) {
   // enable privacy command to lock the tag
   rc = enablePrivacy(password, random);
   return rc;
+}
+
+// set a new privacy password for slix2 Tags
+ISO15693ErrorCode PN5180ISO15693::newpasswordICODESLIX2(uint8_t *newpassword, uint8_t *oldpassword, uint8_t *uid) {
+  // get a random number from the tag
+  uint8_t random[]= {0x00, 0x00};
+  ISO15693ErrorCode rc = getRandomNumber(random);
+  if (rc != ISO15693_EC_OK) {
+    return rc;
+  }
+
+  // set password to unlock the tag
+  rc = setPassword(oldpassword, random);
+
+  if (rc != ISO15693_EC_OK) {
+    return rc;
+  }
+
+  // write new password
+  rc = writePassword(newpassword, uid);
+  
+  return rc;
+
 }
 
 
