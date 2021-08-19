@@ -7,10 +7,19 @@ Arduino Uno / Arduino ESP-32 library for PN5180-NFC Module from NXP Semiconducto
 
 Release Notes:
 
+Version 1.8 - 19.08.2021
+
+	* Added readData and ISO1443 support.
+	
+Version 1.7 - 12.07.2021
+
+	* Migrated branch from Dirk Carstensen for ISO14443 tags to the library.
+	* See https://github.com/tueddy/PN5180-Library/tree/ISO14443
+
 Version 1.6 - 13.03.2021
 
 	* Added PN5180::writeEEPROM
-	
+
 Version 1.5 - 29.01.2020
 
 	* Fixed offset in readSingleBlock. Was off by 1.

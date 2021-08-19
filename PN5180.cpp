@@ -336,10 +336,13 @@ bool PN5180::sendData(uint8_t *data, int len, uint8_t validBits) {
  * preceding an RF data reception, no exception is raised but the data read back from the
  * reception buffer is invalid. If the condition is not fulfilled, an exception is raised.
  */
-uint8_t * PN5180::readData(int len) {
+uint8_t * PN5180::readData(int len, uint8_t *buffer /* = NULL */) {
   if (len > 508) {
     Serial.println(F("*** FATAL: Reading more than 508 bytes is not supported!"));
     return 0L;
+  }
+  if (NULL == buffer) {
+    buffer = readBuffer;
   }
 
   PN5180DEBUG(F("Reading Data (len="));
@@ -349,13 +352,13 @@ uint8_t * PN5180::readData(int len) {
   uint8_t cmd[2] = { PN5180_READ_DATA, 0x00 };
 
   SPI.beginTransaction(PN5180_SPI_SETTINGS);
-  transceiveCommand(cmd, 2, readBuffer, len);
+  transceiveCommand(cmd, 2, buffer, len);
   SPI.endTransaction();
 
 #ifdef DEBUG
   PN5180DEBUG(F("Data read: "));
   for (int i=0; i<len; i++) {
-    PN5180DEBUG(formatHex(readBuffer[i]));
+    PN5180DEBUG(formatHex(buffer[i]));
     PN5180DEBUG(" ");
   }
   PN5180DEBUG("\n");

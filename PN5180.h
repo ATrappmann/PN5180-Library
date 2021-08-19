@@ -103,7 +103,7 @@ public:
   /* cmd 0x09 */
   bool sendData(uint8_t *data, int len, uint8_t validBits = 0);
   /* cmd 0x0a */
-  uint8_t * readData(int len);
+  uint8_t * readData(int len, uint8_t *buffer = NULL);
 
   /* cmd 0x11 */
   bool loadRFConfig(uint8_t txConf, uint8_t rxConf);

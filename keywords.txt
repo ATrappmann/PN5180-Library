@@ -1,15 +1,16 @@
 #######################################
 # Syntax Coloring Map For PN5180-Library
-####################################### 
+#######################################
 # Class
 #######################################
 
 PN5180	KEYWORD1
 PN5180ISO15693	KEYWORD1
+PN5180ISO14443  KEYWORD1
 
 #######################################
-# Methods and Functions 
-#######################################	
+# Methods and Functions
+#######################################
 
 writeRegister	KEYWORD2
 writeRegisterWithOrMask	KEYWORD2
