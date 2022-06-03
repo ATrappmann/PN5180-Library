@@ -305,21 +305,20 @@ ISO15693ErrorCode PN5180ISO15693::getSystemInfo(uint8_t *uid, uint8_t *blockSize
 
   uint8_t infoFlags = readBuffer[1];
   if (infoFlags & 0x01) { // DSFID flag
-    uint8_t dsfid = *p++;
     PN5180DEBUG("DSFID=");  // Data storage format identifier
-    PN5180DEBUG(formatHex(dsfid));
+    PN5180DEBUG(formatHex(*p));
     PN5180DEBUG("\n");
+    p++;
   }
 #ifdef DEBUG
   else PN5180DEBUG(F("No DSFID\n"));
 #endif
 
   if (infoFlags & 0x02) { // AFI flag
-    uint8_t afi = *p++;
     PN5180DEBUG(F("AFI="));  // Application family identifier
-    PN5180DEBUG(formatHex(afi));
+    PN5180DEBUG(formatHex(*p));
     PN5180DEBUG(F(" - "));
-    switch (afi >> 4) {
+    switch (*p >> 4) {
       case 0: PN5180DEBUG(F("All families")); break;
       case 1: PN5180DEBUG(F("Transport")); break;
       case 2: PN5180DEBUG(F("Financial")); break;
@@ -336,22 +335,18 @@ ISO15693ErrorCode PN5180ISO15693::getSystemInfo(uint8_t *uid, uint8_t *blockSize
       default: PN5180DEBUG(F("Unknown")); break;
     }
     PN5180DEBUG("\n");
+    p++;
   }
 #ifdef DEBUG
   else PN5180DEBUG(F("No AFI\n"));
 #endif
 
   if (infoFlags & 0x04) { // VICC Memory size
-    *numBlocks = *p++;
-    *blockSize = *p++;
-    *blockSize = (*blockSize) & 0x1f;
-
-    *blockSize = *blockSize + 1; // range: 1-32
-    *numBlocks = *numBlocks + 1; // range: 1-256
-    uint16_t viccMemSize = (*blockSize) * (*numBlocks);
+    *numBlocks = (*p++) + 1;        // range: 1-256 TODO may cause overflow (blockSize needs to be 16 bit)
+    *blockSize = (*p++ & 0x1f) + 1; // range: 1-32
 
     PN5180DEBUG("VICC MemSize=");
-    PN5180DEBUG(viccMemSize);
+    PN5180DEBUG((*blockSize) * (*numBlocks));
     PN5180DEBUG(" BlockSize=");
     PN5180DEBUG(*blockSize);
     PN5180DEBUG(" NumBlocks=");
@@ -363,10 +358,10 @@ ISO15693ErrorCode PN5180ISO15693::getSystemInfo(uint8_t *uid, uint8_t *blockSize
 #endif
 
   if (infoFlags & 0x08) { // IC reference
-    uint8_t icRef = *p++;
     PN5180DEBUG("IC Ref=");
-    PN5180DEBUG(formatHex(icRef));
+    PN5180DEBUG(formatHex(*p));
     PN5180DEBUG("\n");
+    p++;
   }
 #ifdef DEBUG
   else PN5180DEBUG(F("No IC ref\n"));
