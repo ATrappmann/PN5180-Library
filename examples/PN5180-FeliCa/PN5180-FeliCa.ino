@@ -116,7 +116,7 @@ void setup() {
   Serial.print(".");
   Serial.println(productVersion[0]);
 
-  if (0xff == productVersion[1]) { // if product version 255, the initialization failed
+  if (productVersion[1] == 0xff) { // if product version 255, the initialization failed
     Serial.println(F("Initialization failed!?"));
     Serial.println(F("Press reset to restart..."));
     Serial.flush();

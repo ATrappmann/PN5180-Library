@@ -46,7 +46,7 @@ ISO15693ErrorCode PN5180ISO15693::getInventory(uint8_t *uid) {
 
   uint8_t *readBuffer;
   ISO15693ErrorCode rc = issueISO15693Command(inventory, sizeof(inventory), &readBuffer);
-  if (ISO15693_EC_OK != rc) {
+  if (rc != ISO15693_EC_OK) {
     return rc;
   }
 
@@ -121,7 +121,7 @@ ISO15693ErrorCode PN5180ISO15693::readSingleBlock(uint8_t *uid, uint8_t blockNo,
 
   uint8_t *resultPtr;
   ISO15693ErrorCode rc = issueISO15693Command(readSingleBlock, sizeof(readSingleBlock), &resultPtr);
-  if (ISO15693_EC_OK != rc) {
+  if (rc != ISO15693_EC_OK) {
     return rc;
   }
 
@@ -212,7 +212,7 @@ ISO15693ErrorCode PN5180ISO15693::writeSingleBlock(uint8_t *uid, uint8_t blockNo
 
   uint8_t *resultPtr;
   ISO15693ErrorCode rc = issueISO15693Command(writeCmd, writeCmdSize, &resultPtr);
-  if (ISO15693_EC_OK != rc) {
+  if (rc != ISO15693_EC_OK) {
     free(writeCmd);
     return rc;
   }
@@ -284,7 +284,7 @@ ISO15693ErrorCode PN5180ISO15693::getSystemInfo(uint8_t *uid, uint8_t *blockSize
 
   uint8_t *readBuffer;
   ISO15693ErrorCode rc = issueISO15693Command(sysInfo, sizeof(sysInfo), &readBuffer);
-  if (ISO15693_EC_OK != rc) {
+  if (rc != ISO15693_EC_OK) {
     return rc;
   }
 
@@ -547,10 +547,10 @@ ISO15693ErrorCode PN5180ISO15693::issueISO15693Command(uint8_t *cmd, uint8_t cmd
   sendData(cmd, cmdLen);
   delay(10);
   uint32_t status = getIRQStatus();
-  if (0 == (status & RX_SOF_DET_IRQ_STAT)) {
+  if (!(status & RX_SOF_DET_IRQ_STAT)) {
     return EC_NO_CARD;
   }
-  while (0 == (status & RX_IRQ_STAT)) {
+  while (!(status & RX_IRQ_STAT)) {
     delay(10);
     status = getIRQStatus();
   }
@@ -568,7 +568,7 @@ ISO15693ErrorCode PN5180ISO15693::issueISO15693Command(uint8_t *cmd, uint8_t cmd
   PN5180DEBUG("\n");
 
  *resultPtr = readData(len);
-  if (0L == *resultPtr) {
+  if (*resultPtr == NULL) {
     PN5180DEBUG(F("*** ERROR in readData!\n"));
     return ISO15693_EC_UNKNOWN_ERROR;
   }
@@ -583,7 +583,7 @@ ISO15693ErrorCode PN5180ISO15693::issueISO15693Command(uint8_t *cmd, uint8_t cmd
 #endif
 
   uint32_t irqStatus = getIRQStatus();
-  if (0 == (RX_SOF_DET_IRQ_STAT & irqStatus)) { // no card detected
+  if (!(irqStatus & RX_SOF_DET_IRQ_STAT)) { // no card detected
     clearIRQStatus(TX_IRQ_STAT | IDLE_IRQ_STAT);
     return EC_NO_CARD;
   }

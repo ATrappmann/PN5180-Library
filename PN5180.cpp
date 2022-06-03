@@ -314,7 +314,7 @@ bool PN5180::sendData(uint8_t *data, int len, uint8_t validBits) {
    */
 
   PN5180TransceiveStat transceiveState = getTransceiveState();
-  if (PN5180_TS_WaitTransmit != transceiveState) {
+  if (transceiveState != PN5180_TS_WaitTransmit) {
     PN5180DEBUG(F("*** ERROR: Transceiver not in state WaitTransmit!?\n"));
     return false;
   }
@@ -341,7 +341,7 @@ uint8_t * PN5180::readData(int len, uint8_t *buffer /* = NULL */) {
     Serial.println(F("*** FATAL: Reading more than 508 bytes is not supported!"));
     return 0L;
   }
-  if (NULL == buffer) {
+  if (buffer == NULL) {
     buffer = readBuffer;
   }
 
@@ -415,7 +415,7 @@ bool PN5180::setRF_on() {
   transceiveCommand(cmd, 2);
   SPI.endTransaction();
 
-  while (0 == (TX_RFON_IRQ_STAT & getIRQStatus())); // wait for RF field to set up
+  while (!(getIRQStatus() & TX_RFON_IRQ_STAT)); // wait for RF field to set up
   clearIRQStatus(TX_RFON_IRQ_STAT);
   return true;
 }
@@ -434,7 +434,7 @@ bool PN5180::setRF_off() {
   transceiveCommand(cmd, 2);
   SPI.endTransaction();
 
-  while (0 == (TX_RFOFF_IRQ_STAT & getIRQStatus())); // wait for RF field to shut down
+  while (!(getIRQStatus() & TX_RFOFF_IRQ_STAT)); // wait for RF field to shut down
   clearIRQStatus(TX_RFOFF_IRQ_STAT);
   return true;
 }
@@ -488,7 +488,7 @@ bool PN5180::transceiveCommand(uint8_t *sendBuffer, size_t sendBufferLen, uint8_
 #endif
 
   // 0.
-  while (LOW != digitalRead(PN5180_BUSY)); // wait until busy is low
+  while (digitalRead(PN5180_BUSY) != LOW); // wait until busy is low
   // 1.
   digitalWrite(PN5180_NSS, LOW); delay(2);
   // 2.
@@ -496,15 +496,15 @@ bool PN5180::transceiveCommand(uint8_t *sendBuffer, size_t sendBufferLen, uint8_
     SPI.transfer(sendBuffer[i]);
   }
   // 3.
-  while(HIGH != digitalRead(PN5180_BUSY));  // wait until BUSY is high
+  while(digitalRead(PN5180_BUSY) != HIGH);  // wait until BUSY is high
   // 4.
   digitalWrite(PN5180_NSS, HIGH); delay(1);
   // 5.
-  while (LOW != digitalRead(PN5180_BUSY)); // wait unitl BUSY is low
+  while (digitalRead(PN5180_BUSY) != LOW); // wait unitl BUSY is low
 
   // check, if write-only
   //
-  if ((0 == recvBuffer) || (0 == recvBufferLen)) return true;
+  if ((recvBuffer == NULL) || (recvBufferLen == 0)) return true;
   PN5180DEBUG(F("Receiving SPI frame...\n"));
 
   // 1.
@@ -514,11 +514,11 @@ bool PN5180::transceiveCommand(uint8_t *sendBuffer, size_t sendBufferLen, uint8_
     recvBuffer[i] = SPI.transfer(0xff);
   }
   // 3.
-  while(HIGH != digitalRead(PN5180_BUSY));  // wait until BUSY is high
+  while(digitalRead(PN5180_BUSY) != HIGH);  // wait until BUSY is high
   // 4.
   digitalWrite(PN5180_NSS, HIGH); delay(1);
   // 5.
-  while(LOW != digitalRead(PN5180_BUSY));  // wait until BUSY is low
+  while(digitalRead(PN5180_BUSY) != LOW);  // wait until BUSY is low
 
 #ifdef DEBUG
   PN5180DEBUG(F("Received: "));
@@ -541,7 +541,7 @@ void PN5180::reset() {
   digitalWrite(PN5180_RST, HIGH); // 2ms to ramp up required
   delay(10);
 
-  while (0 == (IDLE_IRQ_STAT & getIRQStatus())); // wait for system to start up
+  while (!(getIRQStatus() & IDLE_IRQ_STAT)); // wait for system to start up
 
   clearIRQStatus(0xffffffff); // clear all flags
 }
