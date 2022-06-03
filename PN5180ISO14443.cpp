@@ -84,7 +84,7 @@ uint8_t PN5180ISO14443::activateTypeA(uint8_t *buffer, uint8_t kind) {
     return 0;
   //Send REQA/WUPA, 7 bits in last byte
   cmd[0] = (kind == 0) ? 0x26 : 0x52;
-  if (!sendData(cmd, 1, 0x07))
+  if (!sendData(cmd, 1, 7))
     return 0;
   // READ 2 bytes ATQA into  buffer
   if (!readData(2, buffer))
@@ -92,7 +92,7 @@ uint8_t PN5180ISO14443::activateTypeA(uint8_t *buffer, uint8_t kind) {
   //Send Anti collision 1, 8 bits in last byte
   cmd[0] = 0x93;
   cmd[1] = 0x20;
-  if (!sendData(cmd, 2, 0x00))
+  if (!sendData(cmd, 2))
     return 0;
   //Read 5 bytes, we will store at offset 2 for later usage
   if (!readData(5, cmd+2))
@@ -106,7 +106,7 @@ uint8_t PN5180ISO14443::activateTypeA(uint8_t *buffer, uint8_t kind) {
   //Send Select anti collision 1, the remaining bytes are already in offset 2 onwards
   cmd[0] = 0x93;
   cmd[1] = 0x70;
-  if (!sendData(cmd, 7, 0x00))
+  if (!sendData(cmd, 7))
     return 0;
   //Read 1 byte SAK into buffer[2]
   if (!readData(1, buffer+2))
@@ -134,7 +134,7 @@ uint8_t PN5180ISO14443::activateTypeA(uint8_t *buffer, uint8_t kind) {
     // Do anti collision 2
     cmd[0] = 0x95;
     cmd[1] = 0x20;
-    if (!sendData(cmd, 2, 0x00))
+    if (!sendData(cmd, 2))
       return 0;
     //Read 5 bytes. we will store at offset 2 for later use
     if (!readData(5, cmd+2))
@@ -152,7 +152,7 @@ uint8_t PN5180ISO14443::activateTypeA(uint8_t *buffer, uint8_t kind) {
     //Send Select anti collision 2
     cmd[0] = 0x95;
     cmd[1] = 0x70;
-    if (!sendData(cmd, 7, 0x00))
+    if (!sendData(cmd, 7))
       return 0;
     //Read 1 byte SAK into buffer[2]
     if (!readData(1, buffer + 2))
@@ -165,11 +165,8 @@ uint8_t PN5180ISO14443::activateTypeA(uint8_t *buffer, uint8_t kind) {
 bool PN5180ISO14443::mifareBlockRead(uint8_t blockno, uint8_t *buffer) {
   bool success = false;
   uint16_t len;
-  uint8_t cmd[2];
-  // Send mifare command 30,blockno
-  cmd[0] = 0x30;
-  cmd[1] = blockno;
-  if (!sendData(cmd, 2, 0x00))
+  uint8_t cmd[] = { 0x30, blockno };
+  if (!sendData(cmd, sizeof(cmd)))
     return false;
   //Check if we have received any data from the tag
   delay(5);
@@ -184,34 +181,29 @@ bool PN5180ISO14443::mifareBlockRead(uint8_t blockno, uint8_t *buffer) {
 
 
 uint8_t PN5180ISO14443::mifareBlockWrite16(uint8_t blockno, uint8_t *buffer) {
-  uint8_t cmd[1];
+  uint8_t cmd[] = { 0xA0, blockno };
   // Clear RX CRC
   writeRegisterWithAndMask(CRC_RX_CONFIG, 0xFFFFFFFE);
 
   // Mifare write part 1
-  cmd[0] = 0xA0;
-  cmd[1] = blockno;
-  sendData(cmd, 2, 0x00);
+  sendData(cmd, sizeof(cmd));
   readData(1, cmd);
 
   // Mifare write part 2
-  sendData(buffer,16, 0x00);
+  sendData(buffer, 16);
   delay(10);
 
   // Read ACK/NAK
   readData(1, cmd);
 
   //Enable RX CRC calculation
-  writeRegisterWithOrMask(CRC_RX_CONFIG, 0x1);
+  writeRegisterWithOrMask(CRC_RX_CONFIG, 0x01);
   return cmd[0];
 }
 
 bool PN5180ISO14443::mifareHalt() {
-  uint8_t cmd[1];
-  //mifare Halt
-  cmd[0] = 0x50;
-  cmd[1] = 0x00;
-  sendData(cmd, 2, 0x00);
+  uint8_t cmd[] = { 0x50, 0x00 };
+  sendData(cmd, sizeof(cmd));
   return true;
 }
 

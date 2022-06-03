@@ -55,7 +55,14 @@ bool PN5180FeliCa::setupRF() {
 * - 8 if a FeliCa tag was recognized
 */
 uint8_t PN5180FeliCa::pol_req(uint8_t *buffer) {
-  uint8_t cmd[6];
+  uint8_t cmd[] = {
+    0x06, //total length
+    0x00, //POL_REQ command
+    0xFF, //
+    0xFF, // any target
+    0x01, // System Code request
+    0x00, // 1 timeslot only
+  };
   uint8_t uidLength = 0;
   // Load FeliCa 424 protocol
   if (!loadRFConfig(0x09, 0x89))
@@ -65,14 +72,7 @@ uint8_t PN5180FeliCa::pol_req(uint8_t *buffer) {
     return 0;
 
   //send FeliCa request (every packet starts with length)
-  cmd[0] = 0x06;             //total length
-  cmd[1] = 0x00;             //POL_REQ command
-  cmd[2] = 0xFF;             //
-  cmd[3] = 0xFF;             // any target
-  cmd[4] = 0x01;             // System Code request
-  cmd[5] = 0x00;             // 1 timeslot only
-
-  if (!sendData(cmd, 6, 0x00))
+  if (!sendData(cmd, sizeof(cmd)))
     return 0;
   //wait a little to avoid bug with some cards
   delay(50);
