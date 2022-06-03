@@ -35,12 +35,7 @@ iClassErrorCode PN5180iClass::ActivateAll() {
   uint8_t actall[] = {ICLASS_CMD_ACTALL};
 
   uint8_t *readBuffer;
-  iClassErrorCode rc = issueiClassCommand(actall, sizeof(actall), &readBuffer);
-  if (ICLASS_EC_OK != rc) {
-    return rc;
-  }
-
-  return ICLASS_EC_OK;
+  return issueiClassCommand(actall, sizeof(actall), &readBuffer);
 }
 
 iClassErrorCode PN5180iClass::Identify(uint8_t *csn) {
@@ -57,7 +52,7 @@ iClassErrorCode PN5180iClass::Identify(uint8_t *csn) {
 
   uint8_t *readBuffer;
   iClassErrorCode rc = issueiClassCommand(identify, sizeof(identify), &readBuffer);
-  if (ICLASS_EC_OK != rc) {
+  if (rc != ICLASS_EC_OK) {
     return rc;
   }
 
@@ -84,7 +79,7 @@ iClassErrorCode PN5180iClass::Select(uint8_t *csn) {
 
   uint8_t *readBuffer;
   iClassErrorCode rc = issueiClassCommand(select, sizeof(select), &readBuffer);
-  if (ICLASS_EC_OK != rc) {
+  if (rc != ICLASS_EC_OK) {
     return rc;
   }
 
@@ -107,7 +102,7 @@ iClassErrorCode PN5180iClass::ReadCheck(uint8_t *ccnr) {
 
   uint8_t *readBuffer;
   iClassErrorCode rc = issueiClassCommand(readcheck, sizeof(readcheck), &readBuffer);
-  if (ICLASS_EC_OK != rc) {
+  if (rc != ICLASS_EC_OK) {
     return rc;
   }
 
@@ -133,12 +128,7 @@ iClassErrorCode PN5180iClass::Check(uint8_t *mac) {
   }
 
   uint8_t *readBuffer;
-  iClassErrorCode rc = issueiClassCommand(check, sizeof(check), &readBuffer);
-  if (ICLASS_EC_OK != rc) {
-    return rc;
-  }
-
-  return ICLASS_EC_OK;
+  return issueiClassCommand(check, sizeof(check), &readBuffer);
 }
 
 iClassErrorCode PN5180iClass::Read(uint8_t blockNum, uint8_t *blockData) {
@@ -151,7 +141,7 @@ iClassErrorCode PN5180iClass::Read(uint8_t blockNum, uint8_t *blockData) {
 
   uint8_t *readBuffer;
   iClassErrorCode rc = issueiClassCommand(read, sizeof(read), &readBuffer);
-  if (ICLASS_EC_OK != rc) {
+  if (rc != ICLASS_EC_OK) {
     return rc;
   }
 
@@ -172,12 +162,7 @@ iClassErrorCode PN5180iClass::Halt() {
   uint8_t halt[] = {ICLASS_CMD_HALT};
 
   uint8_t *readBuffer;
-  iClassErrorCode rc = issueiClassCommand(halt, sizeof(halt), &readBuffer);
-  if (ICLASS_EC_OK != rc) {
-    return rc;
-  }
-
-  return ICLASS_EC_OK;
+  return issueiClassCommand(halt, sizeof(halt), &readBuffer);
 }
 
 iClassErrorCode PN5180iClass::issueiClassCommand(uint8_t *cmd, uint8_t cmdLen, uint8_t **resultPtr) {
@@ -190,7 +175,7 @@ iClassErrorCode PN5180iClass::issueiClassCommand(uint8_t *cmd, uint8_t cmdLen, u
   sendData(cmd, cmdLen);
   delay(10);
 
-  if (0 == (getIRQStatus() & RX_SOF_DET_IRQ_STAT)) {
+  if (!(getIRQStatus() & RX_SOF_DET_IRQ_STAT)) {
     return EC_NO_CARD;
   }
 
@@ -206,8 +191,8 @@ iClassErrorCode PN5180iClass::issueiClassCommand(uint8_t *cmd, uint8_t cmdLen, u
   PN5180DEBUG(len);
   PN5180DEBUG("\n");
 
- *resultPtr = readData(len);
-  if (0L == *resultPtr) {
+  *resultPtr = readData(len);
+  if (*resultPtr == NULL) {
     PN5180DEBUG(F("*** ERROR in readData!\n"));
     return ICLASS_EC_UNKNOWN_ERROR;
   }
@@ -216,19 +201,19 @@ iClassErrorCode PN5180iClass::issueiClassCommand(uint8_t *cmd, uint8_t cmdLen, u
   Serial.print("Read=");
   for (int i=0; i<len; i++) {
     Serial.print(formatHex((*resultPtr)[i]));
-    if (i<len-1) Serial.print(":");
+    if (i < len-1) Serial.print(":");
   }
   Serial.println();
 #endif
 
   uint32_t irqStatus = getIRQStatus();
-  if (0 == (RX_SOF_DET_IRQ_STAT & irqStatus)) { // no card detected
-     clearIRQStatus(TX_IRQ_STAT | IDLE_IRQ_STAT);
-     return EC_NO_CARD;
+  if (!(irqStatus & RX_SOF_DET_IRQ_STAT)) { // no card detected
+    clearIRQStatus(TX_IRQ_STAT | IDLE_IRQ_STAT);
+    return EC_NO_CARD;
   }
 
   // Datasheet Picopass 2K V1.0  section 4.3.2
-  if (RX_SOF_DET_IRQ_STAT == (RX_SOF_DET_IRQ_STAT & irqStatus)) {
+  if (irqStatus & RX_SOF_DET_IRQ_STAT) {
     clearIRQStatus(RX_SOF_DET_IRQ_STAT);
     return ICLASS_EC_OK;
   }
@@ -283,7 +268,6 @@ const __FlashStringHelper *PN5180iClass::strerror(iClassErrorCode errno) {
   switch (errno) {
     case EC_NO_CARD: return F("No card detected!");
     case ICLASS_EC_OK: return F("OK!");
-    default:
-      return F("Undefined error code in iClass!");
+    default: return F("Undefined error code in iClass!");
   }
 }

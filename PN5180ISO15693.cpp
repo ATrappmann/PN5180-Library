@@ -46,7 +46,7 @@ ISO15693ErrorCode PN5180ISO15693::getInventory(uint8_t *uid) {
 
   uint8_t *readBuffer;
   ISO15693ErrorCode rc = issueISO15693Command(inventory, sizeof(inventory), &readBuffer);
-  if (ISO15693_EC_OK != rc) {
+  if (rc != ISO15693_EC_OK) {
     return rc;
   }
 
@@ -77,22 +77,22 @@ ISO15693ErrorCode PN5180ISO15693::getInventory(uint8_t *uid) {
  *  when ERROR flag is set:
  *    SOF, Resp.Flags, ErrorCode, CRC16, EOF
  *
- *     Response Flags:
-  *    xxxx.3xx0
-  *         |||\_ Error flag: 0=no error, 1=error detected, see error field
-  *         \____ Extension flag: 0=no extension, 1=protocol format is extended
-  *
-  *  If Error flag is set, the following error codes are defined:
-  *    01 = The command is not supported, i.e. the request code is not recognized.
-  *    02 = The command is not recognized, i.e. a format error occurred.
-  *    03 = The option is not supported.
-  *    0F = Unknown error.
-  *    10 = The specific block is not available.
-  *    11 = The specific block is already locked and cannot be locked again.
-  *    12 = The specific block is locked and cannot be changed.
-  *    13 = The specific block was not successfully programmed.
-  *    14 = The specific block was not successfully locked.
-  *    A0-DF = Custom command error codes
+ * Response Flags:
+ *    xxxx.3xx0
+ *         |||\_ Error flag: 0=no error, 1=error detected, see error field
+ *         \____ Extension flag: 0=no extension, 1=protocol format is extended
+ *
+ *  If Error flag is set, the following error codes are defined:
+ *    01 = The command is not supported, i.e. the request code is not recognized.
+ *    02 = The command is not recognized, i.e. a format error occurred.
+ *    03 = The option is not supported.
+ *    0F = Unknown error.
+ *    10 = The specific block is not available.
+ *    11 = The specific block is already locked and cannot be locked again.
+ *    12 = The specific block is locked and cannot be changed.
+ *    13 = The specific block was not successfully programmed.
+ *    14 = The specific block was not successfully locked.
+ *    A0-DF = Custom command error codes
  *
  *  when ERROR flag is NOT set:
  *    SOF, Flags, BlockData (len=blockLength), CRC16, EOF
@@ -121,7 +121,7 @@ ISO15693ErrorCode PN5180ISO15693::readSingleBlock(uint8_t *uid, uint8_t blockNo,
 
   uint8_t *resultPtr;
   ISO15693ErrorCode rc = issueISO15693Command(readSingleBlock, sizeof(readSingleBlock), &resultPtr);
-  if (ISO15693_EC_OK != rc) {
+  if (rc != ISO15693_EC_OK) {
     return rc;
   }
 
@@ -212,7 +212,7 @@ ISO15693ErrorCode PN5180ISO15693::writeSingleBlock(uint8_t *uid, uint8_t blockNo
 
   uint8_t *resultPtr;
   ISO15693ErrorCode rc = issueISO15693Command(writeCmd, writeCmdSize, &resultPtr);
-  if (ISO15693_EC_OK != rc) {
+  if (rc != ISO15693_EC_OK) {
     free(writeCmd);
     return rc;
   }
@@ -284,7 +284,7 @@ ISO15693ErrorCode PN5180ISO15693::getSystemInfo(uint8_t *uid, uint8_t *blockSize
 
   uint8_t *readBuffer;
   ISO15693ErrorCode rc = issueISO15693Command(sysInfo, sizeof(sysInfo), &readBuffer);
-  if (ISO15693_EC_OK != rc) {
+  if (rc != ISO15693_EC_OK) {
     return rc;
   }
 
@@ -305,21 +305,20 @@ ISO15693ErrorCode PN5180ISO15693::getSystemInfo(uint8_t *uid, uint8_t *blockSize
 
   uint8_t infoFlags = readBuffer[1];
   if (infoFlags & 0x01) { // DSFID flag
-    uint8_t dsfid = *p++;
     PN5180DEBUG("DSFID=");  // Data storage format identifier
-    PN5180DEBUG(formatHex(dsfid));
+    PN5180DEBUG(formatHex(*p));
     PN5180DEBUG("\n");
+    p++;
   }
 #ifdef DEBUG
   else PN5180DEBUG(F("No DSFID\n"));
 #endif
 
   if (infoFlags & 0x02) { // AFI flag
-    uint8_t afi = *p++;
     PN5180DEBUG(F("AFI="));  // Application family identifier
-    PN5180DEBUG(formatHex(afi));
+    PN5180DEBUG(formatHex(*p));
     PN5180DEBUG(F(" - "));
-    switch (afi >> 4) {
+    switch (*p >> 4) {
       case 0: PN5180DEBUG(F("All families")); break;
       case 1: PN5180DEBUG(F("Transport")); break;
       case 2: PN5180DEBUG(F("Financial")); break;
@@ -336,22 +335,18 @@ ISO15693ErrorCode PN5180ISO15693::getSystemInfo(uint8_t *uid, uint8_t *blockSize
       default: PN5180DEBUG(F("Unknown")); break;
     }
     PN5180DEBUG("\n");
+    p++;
   }
 #ifdef DEBUG
   else PN5180DEBUG(F("No AFI\n"));
 #endif
 
   if (infoFlags & 0x04) { // VICC Memory size
-    *numBlocks = *p++;
-    *blockSize = *p++;
-    *blockSize = (*blockSize) & 0x1f;
-
-    *blockSize = *blockSize + 1; // range: 1-32
-    *numBlocks = *numBlocks + 1; // range: 1-256
-    uint16_t viccMemSize = (*blockSize) * (*numBlocks);
+    *numBlocks = (*p++) + 1;        // range: 1-256 TODO may cause overflow (blockSize needs to be 16 bit)
+    *blockSize = (*p++ & 0x1f) + 1; // range: 1-32
 
     PN5180DEBUG("VICC MemSize=");
-    PN5180DEBUG(viccMemSize);
+    PN5180DEBUG((*blockSize) * (*numBlocks));
     PN5180DEBUG(" BlockSize=");
     PN5180DEBUG(*blockSize);
     PN5180DEBUG(" NumBlocks=");
@@ -363,10 +358,10 @@ ISO15693ErrorCode PN5180ISO15693::getSystemInfo(uint8_t *uid, uint8_t *blockSize
 #endif
 
   if (infoFlags & 0x08) { // IC reference
-    uint8_t icRef = *p++;
     PN5180DEBUG("IC Ref=");
-    PN5180DEBUG(formatHex(icRef));
+    PN5180DEBUG(formatHex(*p));
     PN5180DEBUG("\n");
+    p++;
   }
 #ifdef DEBUG
   else PN5180DEBUG(F("No IC ref\n"));
@@ -406,8 +401,7 @@ ISO15693ErrorCode PN5180ISO15693::setPassword(uint8_t *password, uint8_t *random
   setPassword[5] = password[1] ^ random[1];
   setPassword[6] = password[2] ^ random[0];
   setPassword[7] = password[3] ^ random[1];
-  ISO15693ErrorCode rc = issueISO15693Command(setPassword, sizeof(setPassword), &readBuffer);
-  return rc;
+  return issueISO15693Command(setPassword, sizeof(setPassword), &readBuffer);
 }
 
 ISO15693ErrorCode PN5180ISO15693::enablePrivacy(uint8_t *password, uint8_t *random) {
@@ -417,8 +411,7 @@ ISO15693ErrorCode PN5180ISO15693::enablePrivacy(uint8_t *password, uint8_t *rand
   setPrivacy[4] = password[1] ^ random[1];
   setPrivacy[5] = password[2] ^ random[0];
   setPrivacy[6] = password[3] ^ random[1];
-  ISO15693ErrorCode rc = issueISO15693Command(setPrivacy, sizeof(setPrivacy), &readBuffer);
-  return rc;
+  return issueISO15693Command(setPrivacy, sizeof(setPrivacy), &readBuffer);
 }
 
 ISO15693ErrorCode PN5180ISO15693::writePassword(uint8_t *password, uint8_t *uid) {
@@ -428,8 +421,7 @@ ISO15693ErrorCode PN5180ISO15693::writePassword(uint8_t *password, uint8_t *uid)
   writePassword[13] = password[1];
   writePassword[14] = password[2];
   writePassword[15] = password[3];
-  ISO15693ErrorCode rc = issueISO15693Command(writePassword, sizeof(writePassword), &readBuffer);
-  return rc;
+  return issueISO15693Command(writePassword, sizeof(writePassword), &readBuffer);
 }
 
 
@@ -472,16 +464,14 @@ ISO15693ErrorCode PN5180ISO15693::newpasswordICODESLIX2(uint8_t *newpassword, ui
 
   // set password to unlock the tag
   rc = setPassword(oldpassword, random);
-
   if (rc != ISO15693_EC_OK) {
     return rc;
   }
 
   // write new password
   rc = writePassword(newpassword, uid);
-  
-  return rc;
 
+  return rc;
 }
 
 
@@ -549,10 +539,10 @@ ISO15693ErrorCode PN5180ISO15693::issueISO15693Command(uint8_t *cmd, uint8_t cmd
   sendData(cmd, cmdLen);
   delay(10);
   uint32_t status = getIRQStatus();
-  if (0 == (status & RX_SOF_DET_IRQ_STAT)) {
+  if (!(status & RX_SOF_DET_IRQ_STAT)) {
     return EC_NO_CARD;
   }
-  while (0 == (status & RX_IRQ_STAT)) {
+  while (!(status & RX_IRQ_STAT)) {
     delay(10);
     status = getIRQStatus();
   }
@@ -570,7 +560,7 @@ ISO15693ErrorCode PN5180ISO15693::issueISO15693Command(uint8_t *cmd, uint8_t cmd
   PN5180DEBUG("\n");
 
  *resultPtr = readData(len);
-  if (0L == *resultPtr) {
+  if (*resultPtr == NULL) {
     PN5180DEBUG(F("*** ERROR in readData!\n"));
     return ISO15693_EC_UNKNOWN_ERROR;
   }
@@ -579,15 +569,15 @@ ISO15693ErrorCode PN5180ISO15693::issueISO15693Command(uint8_t *cmd, uint8_t cmd
   Serial.print("Read=");
   for (int i=0; i<len; i++) {
     Serial.print(formatHex((*resultPtr)[i]));
-    if (i<len-1) Serial.print(":");
+    if (i < len-1) Serial.print(":");
   }
   Serial.println();
 #endif
 
   uint32_t irqStatus = getIRQStatus();
-  if (0 == (RX_SOF_DET_IRQ_STAT & irqStatus)) { // no card detected
-     clearIRQStatus(TX_IRQ_STAT | IDLE_IRQ_STAT);
-     return EC_NO_CARD;
+  if (!(irqStatus & RX_SOF_DET_IRQ_STAT)) { // no card detected
+    clearIRQStatus(TX_IRQ_STAT | IDLE_IRQ_STAT);
+    return EC_NO_CARD;
   }
 
   uint8_t responseFlags = (*resultPtr)[0];

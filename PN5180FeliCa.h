@@ -31,10 +31,10 @@ public:
   /*
    * Helper functions
    */
-public:   
+public:
   bool setupRF();
-  uint8_t readCardSerial(uint8_t *buffer);    
-  bool isCardPresent();    
+  uint8_t readCardSerial(uint8_t *buffer);
+  bool isCardPresent();
 };
 
 #endif /* PN5180FeliCa_H */
