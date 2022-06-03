@@ -35,12 +35,7 @@ iClassErrorCode PN5180iClass::ActivateAll() {
   uint8_t actall[] = {ICLASS_CMD_ACTALL};
 
   uint8_t *readBuffer;
-  iClassErrorCode rc = issueiClassCommand(actall, sizeof(actall), &readBuffer);
-  if (rc != ICLASS_EC_OK) {
-    return rc;
-  }
-
-  return ICLASS_EC_OK;
+  return issueiClassCommand(actall, sizeof(actall), &readBuffer);
 }
 
 iClassErrorCode PN5180iClass::Identify(uint8_t *csn) {
@@ -133,12 +128,7 @@ iClassErrorCode PN5180iClass::Check(uint8_t *mac) {
   }
 
   uint8_t *readBuffer;
-  iClassErrorCode rc = issueiClassCommand(check, sizeof(check), &readBuffer);
-  if (rc != ICLASS_EC_OK) {
-    return rc;
-  }
-
-  return ICLASS_EC_OK;
+  return issueiClassCommand(check, sizeof(check), &readBuffer);
 }
 
 iClassErrorCode PN5180iClass::Read(uint8_t blockNum, uint8_t *blockData) {
@@ -172,12 +162,7 @@ iClassErrorCode PN5180iClass::Halt() {
   uint8_t halt[] = {ICLASS_CMD_HALT};
 
   uint8_t *readBuffer;
-  iClassErrorCode rc = issueiClassCommand(halt, sizeof(halt), &readBuffer);
-  if (rc != ICLASS_EC_OK) {
-    return rc;
-  }
-
-  return ICLASS_EC_OK;
+  return issueiClassCommand(halt, sizeof(halt), &readBuffer);
 }
 
 iClassErrorCode PN5180iClass::issueiClassCommand(uint8_t *cmd, uint8_t cmdLen, uint8_t **resultPtr) {
