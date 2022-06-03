@@ -208,14 +208,13 @@ bool PN5180ISO14443::mifareHalt() {
 }
 
 uint8_t PN5180ISO14443::readCardSerial(uint8_t *buffer) {
-  uint8_t response[10];
+  uint8_t response[10] = { 0 };
   uint8_t uidLength;
   // Always return 10 bytes
   // Offset 0..1 is ATQA
   // Offset 2 is SAK.
   // UID 4 bytes : offset 3 to 6 is UID, offset 7 to 9 to Zero
   // UID 7 bytes : offset 3 to 9 is UID
-  for (int i=0; i<10; i++) response[i] = 0;
   uidLength = activateTypeA(response, 1);
   if ((response[0] == 0xFF) && (response[1] == 0xFF))
     return 0;

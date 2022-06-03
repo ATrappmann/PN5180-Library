@@ -96,11 +96,8 @@ uint8_t PN5180FeliCa::pol_req(uint8_t *buffer) {
 }
 
 uint8_t PN5180FeliCa::readCardSerial(uint8_t *buffer) {
-  uint8_t response[20];
+  uint8_t response[20] = { 0 };
   uint8_t uidLength;
-
-    for (int i = 0; i < 20; i++)
-        response[i] = 0;
 
   uidLength = pol_req(response);
 
