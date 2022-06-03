@@ -63,7 +63,6 @@ uint8_t PN5180FeliCa::pol_req(uint8_t *buffer) {
     0x01, // System Code request
     0x00, // 1 timeslot only
   };
-  uint8_t uidLength = 0;
   // Load FeliCa 424 protocol
   if (!loadRFConfig(0x09, 0x89))
     return 0;
@@ -86,13 +85,8 @@ uint8_t PN5180FeliCa::pol_req(uint8_t *buffer) {
     buffer[i] = internalBuffer[i];
   }
 
-  //check Response Code
-  if (buffer[1] != 0x01) {
-    uidLength = 0;
-  } else {
-    uidLength = 8;
-  }
-  return uidLength;
+  // Check response code and return corresponding UID length
+  return buffer[1] == 0x01 ? 8 : 0;
 }
 
 uint8_t PN5180FeliCa::readCardSerial(uint8_t *buffer) {
