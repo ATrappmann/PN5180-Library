@@ -337,7 +337,7 @@ bool PN5180::sendData(uint8_t *data, int len, uint8_t validBits) {
  * reception buffer is invalid. If the condition is not fulfilled, an exception is raised.
  */
 uint8_t * PN5180::readData(int len, uint8_t *buffer /* = NULL */) {
-  if (len > sizeof(readBuffer)) {
+  if (len < 0 || (unsigned int)len > sizeof(readBuffer)) {
     Serial.println(F("*** FATAL: Reading more than 508 bytes is not supported!"));
     return 0;
   }
