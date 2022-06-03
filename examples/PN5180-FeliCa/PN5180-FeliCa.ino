@@ -10,7 +10,7 @@
 // This file is part of the PN5180 library for the Arduino environment.
 //
 // This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public 
+// modify it under the terms of the GNU Lesser General Public
 // License as published by the Free Software Foundation; either
 // version 2.1 of the License, or (at your option) any later version.
 //
@@ -122,7 +122,7 @@ void setup() {
     Serial.flush();
     exit(-1); // halt
   }
-  
+
   Serial.println(F("----------------------------------"));
   Serial.println(F("Reading firmware version..."));
   uint8_t firmwareVersion[2];
@@ -153,8 +153,8 @@ void loop() {
   Serial.println(F("----------------------------------"));
   Serial.print(F("Loop #"));
   Serial.println(loopCnt++);
-  #if defined(ARDUINO_ARCH_ESP32)  
-    Serial.println("Free heap: " + String(ESP.getFreeHeap())); 
+  #if defined(ARDUINO_ARCH_ESP32)
+    Serial.println("Free heap: " + String(ESP.getFreeHeap()));
   #endif
   uint8_t uid[20];
   // check for FeliCa card
@@ -169,10 +169,10 @@ void loop() {
     }
     Serial.println();
     Serial.println(F("----------------------------------"));
-    delay(1000); 
+    delay(1000);
     return;
   }
-  
+
   // no card detected
   Serial.println(F("*** No card detected!"));
 }

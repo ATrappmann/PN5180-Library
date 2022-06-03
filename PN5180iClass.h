@@ -22,18 +22,18 @@
 #include "PN5180.h"
 
 enum {
-  ICLASS_CMD_HALT = 0x00,
-  ICLASS_CMD_ACTALL = 0x0A,
-  ICLASS_CMD_IDENTIFY = 0x0C,
-  ICLASS_CMD_SELECT = 0x81,
+  ICLASS_CMD_HALT      = 0x00,
+  ICLASS_CMD_ACTALL    = 0x0A,
+  ICLASS_CMD_IDENTIFY  = 0x0C,
+  ICLASS_CMD_SELECT    = 0x81,
   ICLASS_CMD_READCHECK = 0x88,
-  ICLASS_CMD_CHECK = 0x05,
-  ICLASS_CMD_READ = 0x0C,
+  ICLASS_CMD_CHECK     = 0x05,
+  ICLASS_CMD_READ      = 0x0C,
 };
 
 enum iClassErrorCode {
-  EC_NO_CARD = -1,
-  ICLASS_EC_OK = 0,
+  EC_NO_CARD              = -1,
+  ICLASS_EC_OK            = 0x00,
   ICLASS_EC_UNKNOWN_ERROR = 0xFE,
 };
 

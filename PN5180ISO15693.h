@@ -22,25 +22,25 @@
 #include "PN5180.h"
 
 enum ISO15693ErrorCode {
-  EC_NO_CARD = -1,
-  ISO15693_EC_OK = 0,
-  ISO15693_EC_NOT_SUPPORTED = 0x01,
-  ISO15693_EC_NOT_RECOGNIZED = 0x02,
+  EC_NO_CARD                       = -1,
+  ISO15693_EC_OK                   = 0x00,
+  ISO15693_EC_NOT_SUPPORTED        = 0x01,
+  ISO15693_EC_NOT_RECOGNIZED       = 0x02,
   ISO15693_EC_OPTION_NOT_SUPPORTED = 0x03,
-  ISO15693_EC_UNKNOWN_ERROR = 0x0f,
-  ISO15693_EC_BLOCK_NOT_AVAILABLE = 0x10,
+  ISO15693_EC_UNKNOWN_ERROR        = 0x0f,
+  ISO15693_EC_BLOCK_NOT_AVAILABLE  = 0x10,
   ISO15693_EC_BLOCK_ALREADY_LOCKED = 0x11,
-  ISO15693_EC_BLOCK_IS_LOCKED = 0x12,
+  ISO15693_EC_BLOCK_IS_LOCKED      = 0x12,
   ISO15693_EC_BLOCK_NOT_PROGRAMMED = 0x13,
-  ISO15693_EC_BLOCK_NOT_LOCKED = 0x14,
-  ISO15693_EC_CUSTOM_CMD_ERROR = 0xA0
+  ISO15693_EC_BLOCK_NOT_LOCKED     = 0x14,
+  ISO15693_EC_CUSTOM_CMD_ERROR     = 0xA0,
 };
 
 class PN5180ISO15693 : public PN5180 {
 
 public:
   PN5180ISO15693(uint8_t SSpin, uint8_t BUSYpin, uint8_t RSTpin);
-  
+
 private:
   ISO15693ErrorCode issueISO15693Command(uint8_t *cmd, uint8_t cmdLen, uint8_t **resultPtr);
 public:
@@ -50,7 +50,7 @@ public:
   ISO15693ErrorCode writeSingleBlock(uint8_t *uid, uint8_t blockNo, uint8_t *blockData, uint8_t blockSize);
 
   ISO15693ErrorCode getSystemInfo(uint8_t *uid, uint8_t *blockSize, uint8_t *numBlocks);
-   
+
   // ICODE SLIX2 specific commands, see https://www.nxp.com/docs/en/data-sheet/SL2S2602.pdf
   ISO15693ErrorCode getRandomNumber(uint8_t *randomData);
   ISO15693ErrorCode setPassword(uint8_t *password, uint8_t *random);
@@ -62,10 +62,9 @@ public:
   /*
    * Helper functions
    */
-public:   
+public:
   bool setupRF();
   const __FlashStringHelper *strerror(ISO15693ErrorCode errno);
-    
 };
 
 #endif /* PN5180ISO15693_H */

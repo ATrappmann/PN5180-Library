@@ -77,22 +77,22 @@ ISO15693ErrorCode PN5180ISO15693::getInventory(uint8_t *uid) {
  *  when ERROR flag is set:
  *    SOF, Resp.Flags, ErrorCode, CRC16, EOF
  *
- *     Response Flags:
-  *    xxxx.3xx0
-  *         |||\_ Error flag: 0=no error, 1=error detected, see error field
-  *         \____ Extension flag: 0=no extension, 1=protocol format is extended
-  *
-  *  If Error flag is set, the following error codes are defined:
-  *    01 = The command is not supported, i.e. the request code is not recognized.
-  *    02 = The command is not recognized, i.e. a format error occurred.
-  *    03 = The option is not supported.
-  *    0F = Unknown error.
-  *    10 = The specific block is not available.
-  *    11 = The specific block is already locked and cannot be locked again.
-  *    12 = The specific block is locked and cannot be changed.
-  *    13 = The specific block was not successfully programmed.
-  *    14 = The specific block was not successfully locked.
-  *    A0-DF = Custom command error codes
+ * Response Flags:
+ *    xxxx.3xx0
+ *         |||\_ Error flag: 0=no error, 1=error detected, see error field
+ *         \____ Extension flag: 0=no extension, 1=protocol format is extended
+ *
+ *  If Error flag is set, the following error codes are defined:
+ *    01 = The command is not supported, i.e. the request code is not recognized.
+ *    02 = The command is not recognized, i.e. a format error occurred.
+ *    03 = The option is not supported.
+ *    0F = Unknown error.
+ *    10 = The specific block is not available.
+ *    11 = The specific block is already locked and cannot be locked again.
+ *    12 = The specific block is locked and cannot be changed.
+ *    13 = The specific block was not successfully programmed.
+ *    14 = The specific block was not successfully locked.
+ *    A0-DF = Custom command error codes
  *
  *  when ERROR flag is NOT set:
  *    SOF, Flags, BlockData (len=blockLength), CRC16, EOF
@@ -472,16 +472,14 @@ ISO15693ErrorCode PN5180ISO15693::newpasswordICODESLIX2(uint8_t *newpassword, ui
 
   // set password to unlock the tag
   rc = setPassword(oldpassword, random);
-
   if (rc != ISO15693_EC_OK) {
     return rc;
   }
 
   // write new password
   rc = writePassword(newpassword, uid);
-  
-  return rc;
 
+  return rc;
 }
 
 
@@ -579,15 +577,15 @@ ISO15693ErrorCode PN5180ISO15693::issueISO15693Command(uint8_t *cmd, uint8_t cmd
   Serial.print("Read=");
   for (int i=0; i<len; i++) {
     Serial.print(formatHex((*resultPtr)[i]));
-    if (i<len-1) Serial.print(":");
+    if (i < len-1) Serial.print(":");
   }
   Serial.println();
 #endif
 
   uint32_t irqStatus = getIRQStatus();
   if (0 == (RX_SOF_DET_IRQ_STAT & irqStatus)) { // no card detected
-     clearIRQStatus(TX_IRQ_STAT | IDLE_IRQ_STAT);
-     return EC_NO_CARD;
+    clearIRQStatus(TX_IRQ_STAT | IDLE_IRQ_STAT);
+    return EC_NO_CARD;
   }
 
   uint8_t responseFlags = (*resultPtr)[0];

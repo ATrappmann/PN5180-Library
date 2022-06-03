@@ -206,7 +206,7 @@ iClassErrorCode PN5180iClass::issueiClassCommand(uint8_t *cmd, uint8_t cmdLen, u
   PN5180DEBUG(len);
   PN5180DEBUG("\n");
 
- *resultPtr = readData(len);
+  *resultPtr = readData(len);
   if (0L == *resultPtr) {
     PN5180DEBUG(F("*** ERROR in readData!\n"));
     return ICLASS_EC_UNKNOWN_ERROR;
@@ -216,15 +216,15 @@ iClassErrorCode PN5180iClass::issueiClassCommand(uint8_t *cmd, uint8_t cmdLen, u
   Serial.print("Read=");
   for (int i=0; i<len; i++) {
     Serial.print(formatHex((*resultPtr)[i]));
-    if (i<len-1) Serial.print(":");
+    if (i < len-1) Serial.print(":");
   }
   Serial.println();
 #endif
 
   uint32_t irqStatus = getIRQStatus();
   if (0 == (RX_SOF_DET_IRQ_STAT & irqStatus)) { // no card detected
-     clearIRQStatus(TX_IRQ_STAT | IDLE_IRQ_STAT);
-     return EC_NO_CARD;
+    clearIRQStatus(TX_IRQ_STAT | IDLE_IRQ_STAT);
+    return EC_NO_CARD;
   }
 
   // Datasheet Picopass 2K V1.0  section 4.3.2
@@ -283,7 +283,6 @@ const __FlashStringHelper *PN5180iClass::strerror(iClassErrorCode errno) {
   switch (errno) {
     case EC_NO_CARD: return F("No card detected!");
     case ICLASS_EC_OK: return F("OK!");
-    default:
-      return F("Undefined error code in iClass!");
+    default: return F("Undefined error code in iClass!");
   }
 }

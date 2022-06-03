@@ -120,7 +120,7 @@ void setup() {
     Serial.flush();
     exit(-1); // halt
   }
-  
+
   Serial.println(F("----------------------------------"));
   Serial.println(F("Reading firmware version..."));
   uint8_t firmwareVersion[2];
@@ -188,28 +188,28 @@ void loop() {
   Serial.println(loopCnt++);
 
 /*
-  // code for unlocking an ICODE SLIX2 protected tag   
+  // code for unlocking an ICODE SLIX2 protected tag
   ISO15693ErrorCode myrc = nfc.unlockICODESLIX2(password);
   if (ISO15693_EC_OK == myrc) {
     Serial.println("unlockICODESLIX2 successful");
   }
 */
-  
-/* 
+
+/*
   // code for set a new SLIX2 privacy password
   nfc.getInventory(uid);
-  Serial.println("set new password"); 
-  
+  Serial.println("set new password");
+
   ISO15693ErrorCode myrc2 = nfc.newpasswordICODESLIX2(password, standardpassword, uid);
-  if (ISO15693_EC_OK == myrc2) { 
-   Serial.println("sucess! new password set");    
+  if (ISO15693_EC_OK == myrc2) {
+   Serial.println("sucess! new password set");
   }else{
-   Serial.println("fail! no new password set: "); 
-   Serial.println(nfc.strerror(myrc2));  
-   Serial.println(" "); 
-  } 
+   Serial.println("fail! no new password set: ");
+   Serial.println(nfc.strerror(myrc2));
+   Serial.println(" ");
+  }
  */
-  
+
   uint8_t uid[8];
   ISO15693ErrorCode rc = nfc.getInventory(uid);
   if (ISO15693_EC_OK != rc) {
@@ -293,7 +293,7 @@ void loop() {
 #endif /* WRITE_ENABLED */
 
 /*
-  // code for locking an ICODE SLIX2 protected tag   
+  // code for locking an ICODE SLIX2 protected tag
   ISO15693ErrorCode myrc = nfc.lockICODESLIX2(password);
   if (ISO15693_EC_OK == myrc) {
     Serial.println("lockICODESLIX2 successful");

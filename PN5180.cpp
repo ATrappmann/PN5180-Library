@@ -196,31 +196,31 @@ bool PN5180::readRegister(uint8_t reg, uint32_t *value) {
 /*
  * WRITE_EEPROM - 0x06
  */
- bool PN5180::writeEEPROM(uint8_t addr, uint8_t *data, int len) {
-   if ((addr > 254) || ((addr+len) > 254)) {
-     PN5180DEBUG(F("ERROR: Writing beyond addr 254!\n"));
-     return false;
-   }
+bool PN5180::writeEEPROM(uint8_t addr, uint8_t *data, int len) {
+  if ((addr > 254) || ((addr+len) > 254)) {
+    PN5180DEBUG(F("ERROR: Writing beyond addr 254!\n"));
+    return false;
+  }
 
-   PN5180DEBUG(F("Writing to EEPROM at 0x"));
-   PN5180DEBUG(formatHex(addr));
-   PN5180DEBUG(F(", size="));
-   PN5180DEBUG(len);
-   PN5180DEBUG(F("...\n"));
+  PN5180DEBUG(F("Writing to EEPROM at 0x"));
+  PN5180DEBUG(formatHex(addr));
+  PN5180DEBUG(F(", size="));
+  PN5180DEBUG(len);
+  PN5180DEBUG(F("...\n"));
 
-   uint8_t buffer[len+2];
-   buffer[0] = PN5180_WRITE_EEPROM;
-   buffer[1] = addr;
-   for (int i=0; i<len; i++) {
-     buffer[2+i] = data[i];
-   }
+  uint8_t buffer[len+2];
+  buffer[0] = PN5180_WRITE_EEPROM;
+  buffer[1] = addr;
+  for (int i=0; i<len; i++) {
+    buffer[2+i] = data[i];
+  }
 
-   SPI.beginTransaction(PN5180_SPI_SETTINGS);
-   transceiveCommand(buffer, len+2);
-   SPI.endTransaction();
+  SPI.beginTransaction(PN5180_SPI_SETTINGS);
+  transceiveCommand(buffer, len+2);
+  SPI.endTransaction();
 
-   return true;
- }
+  return true;
+}
 
 /*
  * READ_EEPROM - 0x07
